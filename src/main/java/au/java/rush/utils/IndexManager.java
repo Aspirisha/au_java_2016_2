@@ -2,6 +2,8 @@ package au.java.rush.utils;
 
 import difflib.DiffUtils;
 import difflib.Patch;
+import difflib.PatchFailedException;
+import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.file.*;
@@ -54,13 +56,15 @@ public class IndexManager extends RepoManager {
         public FileVisitResult visitFile(Path file,
                                          BasicFileAttributes attr) {
             if (attr.isRegularFile() && !attr.isDirectory()) {
-                System.out.format("Regular file: %s ", file);
+                System.out.format("Added file to index file: %s\n", file);
                 try {
                     if (PatchCreationResult.SUCCESS != createPatchForFile(file.toString())) {
                         failedToIndexFiles.add(file);
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
+                    failedToIndexFiles.add(file);
+                } catch (PatchFailedException | ClassNotFoundException e) {
                     failedToIndexFiles.add(file);
                 }
             }
@@ -76,8 +80,9 @@ public class IndexManager extends RepoManager {
          * @return patch whichcan be applied to get current fileName fromthe one that lived in repo
          * @throws IOException
          */
-        private PatchCreationResult createPatchForFile(String fileName) throws IOException {
+        private PatchCreationResult createPatchForFile(String fileName) throws IOException, PatchFailedException, ClassNotFoundException {
             List<String> currentFile = null;
+            // TODO ignore .rush
             try {
                 currentFile = readRepoFile(fileName);
             } catch (IOException e) {
@@ -94,6 +99,7 @@ public class IndexManager extends RepoManager {
             PathRelativeToRoot relPath = manager.getFilePathRelativeToRoot(fileName);
             String indexPath = getFileIndex(relPath);
             if (revisionFile == null) {
+                Files.createDirectories(Paths.get(indexPath).getParent());
                 Files.copy(Paths.get(manager.getFilePathAbsolute(fileName)),
                         Paths.get(indexPath), REPLACE_EXISTING);
                 return PatchCreationResult.SUCCESS;
@@ -107,13 +113,14 @@ public class IndexManager extends RepoManager {
             deletedFiles.remove(relPath.toString());
 
             // TODO if p is not empty, else don't write patch
+            Files.createDirectories(Paths.get(indexPath).getParent());
             Serializer.serialize(p, indexPath);
             return PatchCreationResult.SUCCESS;
         }
     }
 
     String getDeletedFilesFile() {
-        return Paths.get(indexRoot, "deleted").toString();
+        return Paths.get(getInternalRoot(), "deleted").toString();
     }
     /**
      *
@@ -158,10 +165,17 @@ public class IndexManager extends RepoManager {
         return null;
     }
 
-    public void commit(String message) throws IOException {
-        BranchManager bm = new BranchManager(repoRoot);
+    public String commit(String message) throws IOException {
         Revision r = new Revision(Paths.get(repoRoot), message);
         String hash = r.getHash();
-        Serializer.serialize(r, String.join(File.separator, bm.getRevisionsDir(), hash));
+        Path commitDir = Paths.get(getCommitPath(hash));
+        Files.createDirectories(commitDir.getParent());
+
+        Serializer.serialize(r, getRevisionFile(hash));
+        FileUtils.moveDirectory(new File(getIndexDir()), commitDir.toFile());
+
+        BranchManager bm = new BranchManager(repoRoot);
+        bm.updateHeads(hash);
+        return hash;
     }
 }

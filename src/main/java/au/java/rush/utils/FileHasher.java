@@ -21,14 +21,21 @@ import static java.nio.file.FileVisitResult.CONTINUE;
  */
 public class FileHasher {
     private static class DirectoryVisitor extends SimpleFileVisitor<Path>  {
+
+        DirectoryVisitor(Path repoRoot) {
+            this.repoRoot = repoRoot;
+        }
         String hashesConcat = "";
+        Path repoRoot;
         @Override
         public FileVisitResult visitFile(Path file,
                                          BasicFileAttributes attr) {
             if (attr.isRegularFile() && !attr.isDirectory()) {
-                HashCode md5 = null;
                 try {
                     hashesConcat += Files.hash(file.toFile(), Hashing.md5());
+
+                    // add dependency on directory structure
+                    hashesConcat += Hashing.md5().hashString(repoRoot.relativize(file).toString());
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -37,8 +44,8 @@ public class FileHasher {
         }
     }
 
-    public static HashCode getDirectoryOrFileHash(String dir) throws IOException {
-        DirectoryVisitor dv = new DirectoryVisitor();
+    public static HashCode getDirectoryOrFileHash(String dir, Path root) throws IOException {
+        DirectoryVisitor dv = new DirectoryVisitor(root);
         java.nio.file.Files.walkFileTree(Paths.get(dir), dv);
 
         return Hashing.md5().hashString(dv.hashesConcat);

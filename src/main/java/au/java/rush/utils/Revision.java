@@ -1,7 +1,10 @@
 package au.java.rush.utils;
 
+import com.google.common.hash.HashCodes;
+import com.google.common.hash.Hashing;
 import difflib.Patch;
 import difflib.PatchFailedException;
+import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.file.*;
@@ -10,6 +13,8 @@ import java.util.*;
 
 import static au.java.rush.utils.Revision.ElementStatus.*;
 import static java.nio.file.FileVisitResult.CONTINUE;
+import static java.nio.file.FileVisitResult.SKIP_SUBTREE;
+import static javafx.scene.input.KeyCode.T;
 
 /**
  * Created by andy on 9/25/16.
@@ -19,7 +24,8 @@ public class Revision implements Serializable {
         NEW,
         MODIFIED,
         UNMODIFIED,
-        DELETED
+        DELETED,
+        DELETED_EARLIER
     }
 
     private static class DirElement implements Serializable {
@@ -47,14 +53,26 @@ public class Revision implements Serializable {
         return ownHash;
     }
 
+    public String getParentHash() {
+        return parentHash;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
     // creates revision from index
     public Revision(Path repoRoot, String message) throws IOException {
         BranchManager bm = new BranchManager(repoRoot.toString());
-        IndexManager im = new IndexManager(repoRoot.toString());
         this.parentHash = bm.getHeadRevisionHash();
         this.repoRoot = repoRoot;
         this.message = message;
-        ownHash = FileHasher.getDirectoryOrFileHash(im.getIndexDir()).toString();
+        String filesHash = FileHasher.getDirectoryOrFileHash(bm.getIndexDir(),
+                Paths.get(bm.getIndexDir())).toString();
+
+        // add dependency on parent revision
+        ownHash = String.valueOf(Hashing.md5().hashString(filesHash +
+                (parentHash == null ? "" : parentHash)));
         dirStructure = new HashMap<>();
 
         initTransientFields();
@@ -70,7 +88,7 @@ public class Revision implements Serializable {
     private void createDirectoryStructureFromParent() {
         Revision parent;
         try {
-            parent = (Revision) Serializer.deserialize(String.valueOf(revisionsPath.resolve(parentHash)));
+            parent = (Revision) Serializer.deserialize(rm.getRevisionFile(parentHash));
         } catch (IOException e) {
             e.printStackTrace();
             return;
@@ -100,12 +118,18 @@ public class Revision implements Serializable {
                         updatedElement = dirStructure.get(key);
                         updatedElement.status = MODIFIED;
                     } else {
-                        updatedElement = parent.dirStructure.get(key);
+                        updatedElement = k.getValue();
                         updatedElement.status = deletedFiles.contains(key) ? DELETED : UNMODIFIED;
                     }
                     dirStructure.put(key, updatedElement);
                     break;
-                case DELETED: // if this file was created, then it's already added as new
+                case DELETED:
+                case DELETED_EARLIER:
+                    if (!dirStructure.containsKey(key)) {
+                        updatedElement = k.getValue();
+                        updatedElement.status = DELETED_EARLIER;
+                        dirStructure.put(key, updatedElement);
+                    } // else this file was created, so it's already added as new
                     break;
             }
         }
@@ -117,16 +141,15 @@ public class Revision implements Serializable {
     }
 
     private void createNewDirectoryStructure() {
-        String indexRoot = rm.getIndexDir();
+        Path indexRoot = Paths.get(rm.getIndexDir());
 
         class DirectoryStructureCreator extends SimpleFileVisitor<Path> {
             @Override
             public FileVisitResult visitFile(Path file,
                                              BasicFileAttributes attr) {
+
                 if (attr.isRegularFile() && !attr.isDirectory()) {
-                    RepoManager.PathRelativeToRoot p = rm.getFilePathRelativeToRoot(
-                            file.toString());
-                    dirStructure.put(p.toString(), new DirElement(ElementStatus.NEW, new ArrayList<String>()));
+                    dirStructure.put(indexRoot.relativize(file).toString(), new DirElement(ElementStatus.NEW, new ArrayList<String>()));
                 }
                 return CONTINUE;
             }
@@ -134,26 +157,58 @@ public class Revision implements Serializable {
 
         DirectoryStructureCreator pf = new DirectoryStructureCreator();
         try {
-            Files.walkFileTree(Paths.get(indexRoot), pf);
+            Files.walkFileTree(indexRoot, pf);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public void checkout() {
+    public void checkout() throws PatchFailedException, IOException, ClassNotFoundException {
+        for (Map.Entry<String, DirElement> e : dirStructure.entrySet()) {
+            String f = e.getKey();
+            DirElement de = e.getValue();
 
+            if (de.status == DELETED || de.status == DELETED_EARLIER) {
+                Path p = Paths.get(rm.getFilePathAbsolute(f));
+
+                if (!Files.exists(p)) {
+                    continue;
+                }
+
+                try {
+                    Files.delete(Paths.get(rm.getFilePathAbsolute(f)));
+                } catch (DirectoryNotEmptyException x) {
+                    x.printStackTrace();
+                } catch (IOException x) {
+                    x.printStackTrace();
+                }
+
+                continue;
+            }
+            List<String> fileContents = getFileContents(rm.getFilePathRelativeToRoot(f));
+
+            try (Writer writer = new BufferedWriter(new OutputStreamWriter(
+                    new FileOutputStream(repoRoot.resolve(f).toString()), "utf-8"))) {
+
+                for (String s: fileContents)
+                    writer.write(s);
+            } catch (IOException ex) {
+                // report
+            }
+        }
     }
 
-    public List<String> getFileContents(RepoManager.PathRelativeToRoot fileName) {
+    public List<String> getFileContents(RepoManager.PathRelativeToRoot fileName) throws IOException, ClassNotFoundException, PatchFailedException {
         if (!dirStructure.containsKey(fileName.toString()))
             return null;
 
         DirElement de = dirStructure.get(fileName.toString());
 
-        Path firstRevision = revisionsPath.resolve(de.prevModifyingRevisions.get(0));
+        Path firstRevisionCommit = Paths.get(rm.getCommitPath(de.prevModifyingRevisions.get(0)));
         List<String> data = new LinkedList<>();
 
-        try (BufferedReader br = new BufferedReader(new FileReader(firstRevision.toString())))
+        Path commitedFile = firstRevisionCommit.resolve(fileName.path);
+        try (BufferedReader br = new BufferedReader(new FileReader(commitedFile.toString())))
         {
             String sCurrentLine;
             while ((sCurrentLine = br.readLine()) != null) {
@@ -166,43 +221,42 @@ public class Revision implements Serializable {
         }
 
         for (int i = 1; i < de.prevModifyingRevisions.size(); i++) {
-            Path revPath = Paths.get(rm.getRevisionsDir()).resolve(de.prevModifyingRevisions.get(i));
-            data = applyPatch(revPath, data);
+            String revisionHash = de.prevModifyingRevisions.get(i);
+            Path commitPath = Paths.get(rm.getCommitPath(revisionHash));
+            Path revisionPath = Paths.get(rm.getRevisionFile(revisionHash));
+
+            Revision r = (Revision) Serializer.deserialize(revisionPath.toString());
+            if (r.dirStructure.get(fileName.toString()).status == DELETED) {
+                data.clear();
+            }
+            data = applyPatch(commitPath.resolve(fileName.path), data);
         }
 
         return data;
     }
 
-    static List<String> applyPatch(Path patchFile, List<String> target) {
-        Patch restored;
-        try {
-            FileInputStream fis = new FileInputStream(patchFile.toString());
-            ObjectInputStream ois = new ObjectInputStream(fis);
-            restored = (Patch) ois.readObject();
-            ois.close();
-            fis.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
+    static List<String> applyPatch(Path patchFile, List<String> target) throws IOException, ClassNotFoundException, PatchFailedException {
+        Patch<String> restored;
+        try (FileInputStream fis = new FileInputStream(patchFile.toString());
+             ObjectInputStream ois = new ObjectInputStream(fis)) {
+
+            restored = (Patch<String>) ois.readObject();
         }
 
-        try {
-            return restored.applyTo(target);
-        } catch (PatchFailedException e) {
-            e.printStackTrace();
-            return null;
-        }
+        return restored.applyTo(target);
     }
 
     private void writeObject(ObjectOutputStream oos)
             throws IOException {
         // default serialization
+        dirStructure.replaceAll((k, v) -> {
+            if (v.status != UNMODIFIED && v.status != DELETED_EARLIER) {
+                v.prevModifyingRevisions.add(ownHash);
+                return v;
+            }
+            return v;
+        });
+
         oos.defaultWriteObject();
         oos.writeObject(repoRoot.toString());
     }

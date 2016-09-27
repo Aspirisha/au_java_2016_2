@@ -1,6 +1,8 @@
 package au.java.rush.utils;
 
 import com.google.common.base.Strings;
+import difflib.PatchFailedException;
+import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -12,27 +14,28 @@ import java.nio.file.Paths;
  */
 public class BranchManager extends RepoManager {
     private final String branchPath;
-    BranchManager(String repoPath) {
+    public BranchManager(String repoPath) {
         super(repoPath);
         branchPath = Paths.get(repoPath, ".rush", "branches").toString();
     }
 
     public String getCurrentBranch() {
-        String headBranch = null;
-        try (BufferedReader br = new BufferedReader(
-                new FileReader(getHeadFile().toString())))
-        {
-            headBranch = br.readLine();
+        try {
+            return FileUtils.readFileToString(new File(getCurrentBranchFile()));
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        return headBranch;
+        return null;
+    }
+
+    public String getBranchPath(String branch) {
+        return String.join(File.separator, branchPath, branch);
     }
 
     public String getCurrentBranchPath() {
         String curBranch = getCurrentBranch();
-        return String.join(File.separator, branchPath, curBranch);
+        return getBranchPath(curBranch);
     }
 
     public Revision getHeadRevision() {
@@ -88,7 +91,7 @@ public class BranchManager extends RepoManager {
             return null;
         }
 
-        String revPath = String.join(File.separator, repoRoot, "revisions", rev);
+        String revPath = getRevisionFile(rev);
         try (FileInputStream fis = new FileInputStream(revPath);
               ObjectInputStream ois = new ObjectInputStream(fis)) {
             return (Revision) ois.readObject();
@@ -113,5 +116,51 @@ public class BranchManager extends RepoManager {
             return null;
 
         return fileInBranch;
+    }
+
+    private void setCurrentBranch(String branch) {
+        try {
+            FileUtils.write(new File(getCurrentBranchFile()), branch);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean branchExists(String branchName) {
+        return Paths.get(getBranchPath(branchName)).toFile().exists();
+    }
+
+    public void checkout(String branchOrRevision) throws IOException, ClassNotFoundException, PatchFailedException {
+        Path revisionPath = null;
+
+        boolean isBranchCo = false;
+        if (branchExists(branchOrRevision)) {
+            revisionPath = Paths.get(getRevisionsDir(),
+                    String.valueOf(getBranchHeadRevision(branchOrRevision)));
+            isBranchCo = true;
+        } else {
+            revisionPath = Paths.get(getRevisionFile(branchOrRevision));
+            if (!Files.exists(revisionPath)) {
+                throw new FileNotFoundException();
+            }
+        }
+
+        Revision r = (Revision) Serializer.deserialize(revisionPath.toString());
+        r.checkout();
+
+        if (isBranchCo) {
+            setCurrentBranch(branchOrRevision);
+        }
+    }
+
+    public Revision getRevision(String hash) throws IOException, ClassNotFoundException {
+        Path revisionPath = Paths.get(getRevisionFile(hash));
+        return (Revision) Serializer.deserialize(revisionPath.toString());
+    }
+
+    public void updateHeads(String hash) throws IOException {
+        String currentBranch = FileUtils.readFileToString(new File(getCurrentBranchFile()));
+        FileUtils.write(Paths.get(getCurrentBranchPath(), "head").toFile(), hash);
+        FileUtils.write(Paths.get(getHeadFile()).toFile(), hash);
     }
 }

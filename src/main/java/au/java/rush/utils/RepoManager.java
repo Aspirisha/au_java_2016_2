@@ -56,8 +56,8 @@ public class RepoManager {
         if (prefixIndex != 0) {
             return null;
         }
-
-        return new PathRelativeToRoot(absolutePath.substring(repoRoot.length()));
+        Path relative = Paths.get(repoRoot).relativize(Paths.get(absolutePath));
+        return new PathRelativeToRoot(relative);
     }
 
     private String findFileAbsolutePath(String toolName) {
@@ -111,4 +111,19 @@ public class RepoManager {
     public String getIndexDir() {
         return String.join(File.separator, getInternalRoot(), "index");
     }
+    public String getCommitPath(String revision) {
+        return String.join(File.separator, getRevisionsDir(), revision, "commit_data");
+    }
+
+    public String getRevisionDir(String revision) {
+        return String.join(File.separator, getRevisionsDir(), revision);
+    }
+    public String getRevisionFile(String revision) {
+        return String.join(File.separator, getRevisionsDir(), revision, "revision");
+    }
+
+    public String getCurrentBranchFile() {
+        return String.join(File.separator, getInternalRoot(), "current-branch");
+    }
+
 }
