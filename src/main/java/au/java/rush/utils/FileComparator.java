@@ -36,6 +36,13 @@ public class FileComparator {
         return getChunksByType(Delta.TYPE.DELETE);
     }
 
+    public Patch getPatch() throws IOException {
+        final List<String> originalFileLines = fileToLines(original);
+        final List<String> revisedFileLines = fileToLines(revised);
+
+        return DiffUtils.diff(originalFileLines, revisedFileLines);
+    }
+
     private List<Chunk> getChunksByType(Delta.TYPE type) throws IOException {
         final List<Chunk> listOfChanges = new ArrayList<Chunk>();
         final List<Delta> deltas = getDeltas();

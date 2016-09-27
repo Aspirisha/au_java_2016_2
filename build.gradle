@@ -1,15 +1,32 @@
-version '1.0-SNAPSHOT'
+version '1.0'
 
 apply plugin: 'java'
 
 sourceCompatibility = 1.8
+def mainClassName = 'au.java.rush.Rush'
 
 repositories {
     mavenCentral()
+    maven { url "https://jitpack.io" }
+}
+
+task fatJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Version': version,
+                'Main-Class': mainClassName
+    }
+    baseName = "rush"
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+    rename { String fileName ->
+        fileName.split("-")[0] }
 }
 
 dependencies {
-    compile group: 'com.googlecode.java-diff-utils', name: 'diffutils', version: '1.2.1'
-    compile group: 'net.sourceforge.argparse4j', name: 'argparse4j', version: '0.7.0'
+    //compile group: 'com.googlecode.java-diff-utils', name: 'diffutils', version: '1.2.1' // diff
+
+    compile 'com.github.Aspirisha:java-diff-utils:197c25b'
+    compile group: 'net.sourceforge.argparse4j', name: 'argparse4j', version: '0.7.0' // arg parsing
+    compile group: 'com.google.guava', name: 'guava', version: '13.0' // hashing
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }

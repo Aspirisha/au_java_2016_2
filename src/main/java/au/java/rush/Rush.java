@@ -9,15 +9,15 @@ import net.sourceforge.argparse4j.inf.*;
  * Created by andy on 9/25/16.
  */
 public class Rush {
-    public static void main(String[] args1) {
-        String[] args = {"branch", "fff"};
+    public static void main(String[] args) {
+        String[] args1 = args;//{"branch", "fff"};
 
-        ArgumentParser parser = ArgumentParsers.newArgumentParser("Checksum")
+        ArgumentParser parser = ArgumentParsers.newArgumentParser("rush")
                 .defaultHelp(true)
-                .description("Calculate checksum of given files.");
+                .description("rush is a simple yet unpowerful vcs.");
         Subparsers subparsers = parser.addSubparsers().help("sub-command help");
 
-        Subparser parserBranch = subparsers.addParser("branch").help("branch help")
+        Subparser parserBranch = subparsers.addParser("branch").help("create or delete a branch")
                 .setDefault("func", new BranchCommand());
         parserBranch.addArgument("-d").action(Arguments.storeTrue());
         parserBranch.addArgument("branchName")
@@ -27,17 +27,17 @@ public class Rush {
 
         Subparser parserCheckout = subparsers.addParser("checkout")
                 .aliases("co")
-                .help("checkout help")
+                .help("checkout branch or revision")
                 .setDefault("func", new CheckoutCommand());
         parserCheckout.addArgument("branchOrRevision")
-                .metavar("N")
+                .metavar("revision")
                 .type(String.class)
-                .help("branch or revision name");
+                .help("branch name or revision hash code");
 
         Subparser parserCommit = subparsers.addParser("commit")
-                .help("commit help")
+                .help("commit changes")
                 .setDefault("func", new CommitCommand());
-        parserCommit.addArgument("-m");
+        parserCommit.addArgument("-m").required(true).metavar("message");
 
         Subparser parserLog = subparsers.addParser("log")
                 .help("log help")
