@@ -5,7 +5,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 /**
  * Created by andy on 9/25/16.
  */
-public class DiffCommand implements Subcommand {
+public class DiffCommand extends AbstractCommand {
     @Override
     public void execute(Namespace args) {
 

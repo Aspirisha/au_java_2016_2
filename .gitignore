@@ -35,6 +35,7 @@ fabric.properties
 
 #java
 *.class
+logback/build
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/

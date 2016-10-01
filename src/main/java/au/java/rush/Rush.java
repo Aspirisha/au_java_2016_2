@@ -4,14 +4,11 @@ import au.java.rush.commands.*;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.*;
-
 /**
  * Created by andy on 9/25/16.
  */
 public class Rush {
     public static void main(String[] args) {
-        String[] args1 = args;//{"branch", "fff"};
-
         ArgumentParser parser = ArgumentParsers.newArgumentParser("rush")
                 .defaultHelp(true)
                 .description("rush is a simple yet unpowerful vcs.");
@@ -42,6 +39,12 @@ public class Rush {
         Subparser parserLog = subparsers.addParser("log")
                 .help("log help")
                 .setDefault("func", new LogCommand());
+        parserLog.addArgument("branchOrRevision")
+                .metavar("revision")
+                .type(String.class)
+                .nargs("?")
+                .help("branch name pr revision hash code")
+                .setDefault((Object)null);
 
         Subparser parserMerge = subparsers.addParser("merge")
                 .help("merge help")

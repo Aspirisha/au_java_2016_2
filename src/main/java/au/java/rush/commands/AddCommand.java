@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+
 /**
  * Created by andy on 9/25/16.
  */
@@ -36,6 +37,9 @@ public class AddCommand extends AbstractCommand {
             im.createPatch(fileOrDirToAdd);
         } catch (IOException e) {
             System.out.println("Failed to add file " + fileOrDirToAdd + " to index");
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
         }
 
     }

@@ -4,6 +4,7 @@ import difflib.DiffUtils;
 import difflib.Patch;
 import difflib.PatchFailedException;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.*;
@@ -127,11 +128,13 @@ public class IndexManager extends RepoManager {
      * @param fileOrDir relative to repoRoot path
      * @return
      */
-    public void createPatch(String fileOrDir) throws IOException {
+    public void createPatch(String fileOrDir) throws IOException, ClassNotFoundException {
         Path startingDir = Paths.get(repoRoot, fileOrDir);
 
         BranchManager bm = new BranchManager(repoRoot);
-        Revision r = bm.getHeadRevision();
+        Revision r = bm.hasHeadRevision() ? bm.getHeadRevision() : null;
+        LoggerFactory.getLogger(IndexManager.class).debug("Head revision is " +
+                (r == null ? "null" : r.getHash()));
         PatchCreator pf = new PatchCreator(bm, r);
         Files.walkFileTree(startingDir, pf);
         Serializer.serialize(pf.deletedFiles, getDeletedFilesFile());
@@ -165,7 +168,17 @@ public class IndexManager extends RepoManager {
         return null;
     }
 
-    public String commit(String message) throws IOException {
+    /**
+     *
+     * @param message commit message
+     * @return hash of new commit or empty string, if there was nothing to commit
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
+    public String commit(String message) throws IOException, ClassNotFoundException {
+        if (!Files.exists(Paths.get(getIndexDir())))
+            return "";
+
         Revision r = new Revision(Paths.get(repoRoot), message);
         String hash = r.getHash();
         Path commitDir = Paths.get(getCommitPath(hash));

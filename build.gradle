@@ -13,7 +13,8 @@ repositories {
 task fatJar(type: Jar) {
     manifest {
         attributes 'Implementation-Version': version,
-                'Main-Class': mainClassName
+                'Main-Class': mainClassName,
+                'Class-Path': sourceSets.main.runtimeClasspath + files('src/main/resources/')
     }
     baseName = "rush"
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
@@ -23,11 +24,11 @@ task fatJar(type: Jar) {
 }
 
 dependencies {
-    //compile group: 'com.googlecode.java-diff-utils', name: 'diffutils', version: '1.2.1' // diff
-
     compile 'com.github.Aspirisha:java-diff-utils:197c25b'
     compile group: 'net.sourceforge.argparse4j', name: 'argparse4j', version: '0.7.0' // arg parsing
     compile group: 'com.google.guava', name: 'guava', version: '13.0' // hashing
     compile group: 'commons-io', name: 'commons-io', version: '2.4'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '0.9.26'
+    compile project(':logback') 
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }

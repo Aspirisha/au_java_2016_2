@@ -1,2 +1,3 @@
 rootProject.name = 'vcs'
+include 'logback'
 

@@ -2,12 +2,14 @@ package au.java.rush.commands;
 
 import au.java.rush.utils.BranchManager;
 import au.java.rush.utils.Revision;
+import javafx.util.Pair;
 import net.sourceforge.argparse4j.inf.Namespace;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Stack;
 
 /**
@@ -23,18 +25,42 @@ public class LogCommand extends AbstractCommand {
         }
 
         Stack<Revision> revisions = new Stack<>();
-        Revision r = bm.getBranchHeadRevision(bm.getCurrentBranch());
-        if (r == null) {
-            return;
-        }
-        revisions.add(r);
-        while (r.getParentHash() != null) {
+        Revision r = null;
+        String branchOrRevision = args.getString("branchOrRevision");
+
+        if (branchOrRevision == null) {
             try {
-                r = bm.getRevision(r.getParentHash());
+                r = bm.getHeadRevision();
+            } catch (FileNotFoundException e) {
+                System.out.println("Commit history is empty for current head");
+            } catch (IOException e) {
+                System.out.println("Failed ");
+            } catch (ClassNotFoundException e) {
+                System.out.println("Internal rush error. Error information is stored in...");
+            }
+        } else {
+            try {
+                r = bm.getRevisionByHashOrBranch(branchOrRevision);
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
+            }
+        }
+
+        if (r == null) {
+            return;
+        }
+        revisions.add(r);
+        while (!r.getParentHash().isEmpty()) {
+            try {
+                r = bm.getRevisionByHash(r.getParentHash());
+            } catch (IOException e) {
+                System.out.println("Error reading some parent revisions. " +
+                        "History is limited to last uncorrupted revision.");
+                break;
+            } catch (ClassNotFoundException e) {
+                System.out.println("Internal rush error. Error information is stored in...");
             }
             revisions.add(r);
         }

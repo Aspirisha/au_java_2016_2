@@ -25,9 +25,14 @@ public class CommitCommand extends AbstractCommand {
 
         try {
             String hash = im.commit(message);
-
-
+            if (!hash.isEmpty()) {
+                System.out.format("Committed revision %s \t %s\n", hash, message);
+            } else {
+                System.out.println("Nothing to commit. First add some files with add command.");
+            }
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
 

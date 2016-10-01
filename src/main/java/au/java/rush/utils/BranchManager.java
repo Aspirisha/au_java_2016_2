@@ -1,7 +1,7 @@
 package au.java.rush.utils;
 
-import com.google.common.base.Strings;
 import difflib.PatchFailedException;
+import javafx.util.Pair;
 import org.apache.commons.io.FileUtils;
 
 import java.io.*;
@@ -19,102 +19,57 @@ public class BranchManager extends RepoManager {
         branchPath = Paths.get(repoPath, ".rush", "branches").toString();
     }
 
-    public String getCurrentBranch() {
-        try {
-            return FileUtils.readFileToString(new File(getCurrentBranchFile()));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return null;
+    public String getCurrentBranch() throws IOException {
+        return FileUtils.readFileToString(FileUtils.getFile(getCurrentBranchFile()));
     }
 
     public String getBranchPath(String branch) {
         return String.join(File.separator, branchPath, branch);
     }
 
-    public String getCurrentBranchPath() {
+    public String getCurrentBranchPath() throws IOException {
         String curBranch = getCurrentBranch();
         return getBranchPath(curBranch);
     }
 
-    public Revision getHeadRevision() {
-        String rev = getHeadRevisionHash();
-        String revPath = String.join(File.separator, repoRoot, "revisions", rev);
-
-        try {
-            return (Revision) Serializer.deserialize(revPath);
-        } catch (IOException e) {
-           // e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-           // e.printStackTrace();
-        }
-
-        return null;
+    public Revision getHeadRevision() throws IOException, ClassNotFoundException {
+        return getRevisionByHash(getHeadRevisionHash());
     }
 
-    public Revision getCurrentBranchHeadRevision() {
+    public Revision getCurrentBranchHeadRevision() throws IOException, ClassNotFoundException {
         return getBranchHeadRevision(getCurrentBranch());
+    }
+
+    public boolean hasHeadRevision() throws IOException {
+        return !getHeadRevisionHash().isEmpty();
     }
 
     /**
      *
      * @return hash of current head revision
      */
-    public String getHeadRevisionHash() {
+    public String getHeadRevisionHash() throws IOException {
         String branchConfig = String.join(File.separator, getInternalRoot(), "head");
-        String rev = null;
-        try (BufferedReader in = new BufferedReader(new FileReader(branchConfig))) {
-            return in.readLine();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        return FileUtils.readFileToString(FileUtils.getFile(branchConfig));
     }
 
-    public Revision getBranchHeadRevision(String branchName) {
-        if (branchName == null)
-            return null;
-
+    public String getBranchHeadRevisionHash(String branchName) throws IOException {
         String branchConfig = String.join(File.separator, branchPath, branchName, "head");
-        String rev = null;
-        try (BufferedReader in = new BufferedReader(new FileReader(branchConfig))) {
-            rev = in.readLine();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-
-        String revPath = getRevisionFile(rev);
-        try (FileInputStream fis = new FileInputStream(revPath);
-              ObjectInputStream ois = new ObjectInputStream(fis)) {
-            return (Revision) ois.readObject();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        }
-
+        return FileUtils.readFileToString(FileUtils.getFile(branchConfig));
     }
-    public Path getFile(Path filePath) {
-        Path branchPath = Paths.get(getCurrentBranchPath());
 
+    public Revision getBranchHeadRevision(String branchName) throws IOException, ClassNotFoundException {
+        String rev = getBranchHeadRevisionHash(branchName);
+        String revPath = getRevisionFile(rev);
+        return (Revision) Serializer.deserialize(revPath);
+    }
+
+    public Path getFile(Path filePath) throws IOException {
+        Path branchPath = Paths.get(getCurrentBranchPath());
         Path fileInBranch = branchPath.resolve(filePath);
 
         if (!Files.exists(fileInBranch))
             return null;
-
         return fileInBranch;
     }
 
@@ -130,36 +85,52 @@ public class BranchManager extends RepoManager {
         return Paths.get(getBranchPath(branchName)).toFile().exists();
     }
 
-    public void checkout(String branchOrRevision) throws IOException, ClassNotFoundException, PatchFailedException {
-        Path revisionPath = null;
-
-        boolean isBranchCo = false;
+    /**
+     * Get revision path in file system by either revision hash or branch name
+     * @param branchOrRevision name of either branch or revision to get path for
+     * @return pair, where first element is path to revision, and second is true if the passed
+     *         name refers to branch, not a revision hash
+     * @throws IOException in case
+     * @throws ClassNotFoundException
+     */
+    private Pair<Path, Boolean> getRevisionPathByBranchOrRevisionName(String branchOrRevision)
+            throws IOException {
         if (branchExists(branchOrRevision)) {
-            revisionPath = Paths.get(getRevisionsDir(),
-                    String.valueOf(getBranchHeadRevision(branchOrRevision)));
-            isBranchCo = true;
-        } else {
-            revisionPath = Paths.get(getRevisionFile(branchOrRevision));
-            if (!Files.exists(revisionPath)) {
-                throw new FileNotFoundException();
-            }
+            return new Pair<>(Paths.get(getRevisionsDir(),
+                    String.valueOf(getBranchHeadRevisionHash(branchOrRevision))), true);
         }
 
-        Revision r = (Revision) Serializer.deserialize(revisionPath.toString());
+        Path rev = Paths.get(getRevisionFile(branchOrRevision));
+        if (!Files.exists(rev)) {
+            throw new FileNotFoundException();
+        }
+        return new Pair<>(rev, false);
+    }
+
+    public void checkout(String branchOrRevision) throws IOException, ClassNotFoundException, PatchFailedException {
+        Pair<Path, Boolean> revisionPath =
+                getRevisionPathByBranchOrRevisionName(branchOrRevision);
+
+        Revision r = (Revision) Serializer.deserialize(revisionPath.getKey().toString());
         r.checkout();
 
-        if (isBranchCo) {
+        if (revisionPath.getValue()) {
             setCurrentBranch(branchOrRevision);
         }
     }
 
-    public Revision getRevision(String hash) throws IOException, ClassNotFoundException {
+    public Revision getRevisionByHash(String hash) throws IOException, ClassNotFoundException {
         Path revisionPath = Paths.get(getRevisionFile(hash));
         return (Revision) Serializer.deserialize(revisionPath.toString());
     }
 
-    public void updateHeads(String hash) throws IOException {
-        String currentBranch = FileUtils.readFileToString(new File(getCurrentBranchFile()));
+    public Revision getRevisionByHashOrBranch(String branchOrRevision) throws IOException, ClassNotFoundException {
+        Pair<Path, Boolean> revisionPath =
+                getRevisionPathByBranchOrRevisionName(branchOrRevision);
+        return (Revision) Serializer.deserialize(revisionPath.getKey().toString());
+    }
+
+    void updateHeads(String hash) throws IOException {
         FileUtils.write(Paths.get(getCurrentBranchPath(), "head").toFile(), hash);
         FileUtils.write(Paths.get(getHeadFile()).toFile(), hash);
     }
