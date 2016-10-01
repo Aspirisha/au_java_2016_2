@@ -1,5 +1,5 @@
 #!/bin/bash
-rm -r .rush
+rm -r .rush/
 echo text > file
 ./rush init
 ./rush add file
@@ -7,4 +7,4 @@ echo text > file
 echo "some more text" >> file
 ./rush add file
 ./rush commit -m "second commit"
-
+./rush branch b2

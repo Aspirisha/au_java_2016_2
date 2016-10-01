@@ -1,14 +1,14 @@
 package au.java.rush.commands;
 
 import au.java.rush.utils.BranchManager;
-import au.java.rush.utils.Revision;
-import javafx.util.Pair;
+import au.java.rush.structures.Revision;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Stack;
 
@@ -16,6 +16,8 @@ import java.util.Stack;
  * Created by andy on 9/25/16.
  */
 public class LogCommand extends AbstractCommand {
+    private Logger logger = LoggerFactory.getLogger(LogCommand.class);
+
     @Override
     public void execute(Namespace args) {
         BranchManager bm = new BranchManager(repo);
@@ -65,6 +67,17 @@ public class LogCommand extends AbstractCommand {
             revisions.add(r);
         }
 
+        try {
+            if (!bm.isDetachedHead()) {
+                System.out.format("On branch %s\n", bm.getCurrentBranch());
+            } else {
+                System.out.format("In a detached head mode. Head revision is %s\n",
+                        bm.getHeadRevisionHash());
+            }
+        } catch (IOException e) {
+            System.out.println("Couldn't read current branch information.");
+            logger.error("", e);
+        }
         revisions.stream().forEach(rev -> {
             System.out.format("%s\t %s\n", rev.getHash(), rev.getMessage());
         });

@@ -1,9 +1,11 @@
 package au.java.rush.utils;
 
+import au.java.rush.structures.Revision;
 import difflib.DiffUtils;
 import difflib.Patch;
 import difflib.PatchFailedException;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
@@ -22,6 +24,8 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
  */
 public class IndexManager extends RepoManager {
     private final String indexRoot;
+    private Logger logger = LoggerFactory.getLogger(IndexManager.class);
+
     public IndexManager(String repoRoot) {
         super(repoRoot);
         indexRoot = Paths.get(repoRoot, ".rush", "index").toString();
@@ -39,6 +43,7 @@ public class IndexManager extends RepoManager {
         final Revision revision;
         HashSet<String> deletedFiles = null;
         private List<Path> failedToIndexFiles;
+        HashMap<String, Boolean> lineEndings;
 
         PatchCreator(RepoManager manager, Revision revision) {
             this.manager = manager;
@@ -49,6 +54,12 @@ public class IndexManager extends RepoManager {
                 deletedFiles = (HashSet<String>) Serializer.deserialize(getDeletedFilesFile());
             } catch (IOException | ClassNotFoundException e) {
                 deletedFiles = new HashSet<>();
+            }
+
+            try {
+                lineEndings = (HashMap<String, Boolean>) Serializer.deserialize(getLineEndingsFile());
+            }catch (IOException | ClassNotFoundException e) {
+                lineEndings = new HashMap<>();
             }
         }
         // Print information about
@@ -98,6 +109,18 @@ public class IndexManager extends RepoManager {
             }
 
             PathRelativeToRoot relPath = manager.getFilePathRelativeToRoot(fileName);
+
+            if (currentFile == null) {
+                deletedFiles.add(relPath.toString());
+                return PatchCreationResult.SUCCESS;
+            }
+
+            // set line ending info
+            String data = FileUtils.readFileToString(
+                    FileUtils.getFile(manager.getFilePathAbsolute(fileName)));
+
+            lineEndings.put(relPath.toString(), data.isEmpty() || data.endsWith("\n"));
+
             String indexPath = getFileIndex(relPath);
             if (revisionFile == null) {
                 Files.createDirectories(Paths.get(indexPath).getParent());
@@ -106,10 +129,6 @@ public class IndexManager extends RepoManager {
                 return PatchCreationResult.SUCCESS;
             }
 
-            if (currentFile == null) {
-                deletedFiles.add(relPath.toString());
-                return PatchCreationResult.SUCCESS;
-            }
             Patch p = DiffUtils.diff(revision.getFileContents(relPath), currentFile);
             deletedFiles.remove(relPath.toString());
 
@@ -120,8 +139,12 @@ public class IndexManager extends RepoManager {
         }
     }
 
-    String getDeletedFilesFile() {
+    public String getDeletedFilesFile() {
         return Paths.get(getInternalRoot(), "deleted").toString();
+    }
+
+    public String getLineEndingsFile() {
+        return Paths.get(getInternalRoot(), "line-endings").toString();
     }
     /**
      *
@@ -138,6 +161,7 @@ public class IndexManager extends RepoManager {
         PatchCreator pf = new PatchCreator(bm, r);
         Files.walkFileTree(startingDir, pf);
         Serializer.serialize(pf.deletedFiles, getDeletedFilesFile());
+        Serializer.serialize(pf.lineEndings, getLineEndingsFile());
     }
 
     public String getFileIndex(PathRelativeToRoot file) {

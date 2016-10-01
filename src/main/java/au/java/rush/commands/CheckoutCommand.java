@@ -3,6 +3,8 @@ package au.java.rush.commands;
 import au.java.rush.utils.BranchManager;
 import difflib.PatchFailedException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -13,6 +15,8 @@ import java.nio.file.Paths;
  * Created by andy on 9/25/16.
  */
 public class CheckoutCommand extends AbstractCommand {
+    private Logger logger = LoggerFactory.getLogger(CheckoutCommand.class);
+
     @Override
     public void execute(Namespace args) {
         String revision = args.getString("branchOrRevision");
@@ -23,6 +27,7 @@ public class CheckoutCommand extends AbstractCommand {
         }
 
 
+        logger.info("Checking out revision " + revision);
         try {
             bm.checkout(revision);
             // TODO tell the user if he can lose something!!!!!

@@ -17,20 +17,19 @@ public class InitCommand extends AbstractCommand {
     @Override
     public void execute(Namespace args) {
         Path root = Paths.get(repo, ".rush");
+        RepoManager rm = new RepoManager(repo);
 
-        if (Files.exists(root)) {
+        if (Files.exists(Paths.get(rm.getRevisionsDir()))) {
             System.out.println("Rush repository already initialized in " + root);
             return;
         }
-
-        RepoManager rm = new RepoManager(repo);
 
         try {
             Files.createDirectories(Paths.get(rm.getBranchesDir(), "master"));
             Files.createDirectories(Paths.get(rm.getIndexDir()));
             Files.createDirectories(Paths.get(rm.getRevisionsDir()));
             Files.createFile(Paths.get(rm.getHeadFile()));
-            FileUtils.write(new File(rm.getCurrentBranchFile()), "master");
+            FileUtils.write(FileUtils.getFile(rm.getCurrentBranchFile()), "master");
         } catch (IOException e) {
             System.out.println("Failed to initialize repository: unable to create .rush directory.");
             return;

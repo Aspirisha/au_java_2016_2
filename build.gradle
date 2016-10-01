@@ -29,6 +29,6 @@ dependencies {
     compile group: 'com.google.guava', name: 'guava', version: '13.0' // hashing
     compile group: 'commons-io', name: 'commons-io', version: '2.4'
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '0.9.26'
-    compile project(':logback') 
+    compile project(':logback')
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }

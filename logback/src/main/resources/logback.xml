@@ -1,7 +1,9 @@
 <configuration>
+    <property name="LOGDIR" value="${app.workdir}/.rush/logs" />
+
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <param name="Append" value="false" />
-        <file>.rush/logs/main.log</file>
+        <file>${LOGDIR}/main.log</file>
         <encoder>
             <pattern>%date %level [%thread] %logger{10} [%file : %line] %msg%n</pattern>
         </encoder>

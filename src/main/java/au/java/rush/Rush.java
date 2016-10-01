@@ -4,11 +4,18 @@ import au.java.rush.commands.*;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.*;
+
+import java.nio.file.Paths;
+
 /**
  * Created by andy on 9/25/16.
  */
 public class Rush {
     public static void main(String[] args) {
+        String cwd = System.getProperty("user.dir");
+        // this is needed for proper logging location
+        System.setProperty("app.workdir", Paths.get(cwd).toAbsolutePath().toString());
+
         ArgumentParser parser = ArgumentParsers.newArgumentParser("rush")
                 .defaultHelp(true)
                 .description("rush is a simple yet unpowerful vcs.");
@@ -18,7 +25,7 @@ public class Rush {
                 .setDefault("func", new BranchCommand());
         parserBranch.addArgument("-d").action(Arguments.storeTrue());
         parserBranch.addArgument("branchName")
-                .metavar("N")
+                .metavar("name")
                 .type(String.class)
                 .help("branch name");
 

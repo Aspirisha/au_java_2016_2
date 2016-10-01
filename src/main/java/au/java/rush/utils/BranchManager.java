@@ -1,8 +1,11 @@
 package au.java.rush.utils;
 
+import au.java.rush.structures.Revision;
 import difflib.PatchFailedException;
 import javafx.util.Pair;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -13,6 +16,8 @@ import java.nio.file.Paths;
  * Created by andy on 9/25/16.
  */
 public class BranchManager extends RepoManager {
+    private Logger logger = LoggerFactory.getLogger(BranchManager.class);
+
     private final String branchPath;
     public BranchManager(String repoPath) {
         super(repoPath);
@@ -23,6 +28,11 @@ public class BranchManager extends RepoManager {
         return FileUtils.readFileToString(FileUtils.getFile(getCurrentBranchFile()));
     }
 
+    /**
+     *
+     * @param branch name of branch
+     * @return path to directory containing branch specific data
+     */
     public String getBranchPath(String branch) {
         return String.join(File.separator, branchPath, branch);
     }
@@ -42,6 +52,10 @@ public class BranchManager extends RepoManager {
 
     public boolean hasHeadRevision() throws IOException {
         return !getHeadRevisionHash().isEmpty();
+    }
+
+    public boolean hasHeadRevision(String branchName) throws IOException {
+        return !getBranchHeadRevisionHash(branchName).isEmpty();
     }
 
     /**
@@ -97,7 +111,7 @@ public class BranchManager extends RepoManager {
             throws IOException {
         if (branchExists(branchOrRevision)) {
             return new Pair<>(Paths.get(getRevisionsDir(),
-                    String.valueOf(getBranchHeadRevisionHash(branchOrRevision))), true);
+                    String.valueOf(getBranchHeadRevisionHash(branchOrRevision)), "revision"), true);
         }
 
         Path rev = Paths.get(getRevisionFile(branchOrRevision));
@@ -110,6 +124,12 @@ public class BranchManager extends RepoManager {
     public void checkout(String branchOrRevision) throws IOException, ClassNotFoundException, PatchFailedException {
         Pair<Path, Boolean> revisionPath =
                 getRevisionPathByBranchOrRevisionName(branchOrRevision);
+
+        logger.info("revision path = " + revisionPath.getKey());
+        if (revisionPath.getValue() && !hasHeadRevision(branchOrRevision)) {
+            setCurrentBranch(branchOrRevision);
+            return;
+        }
 
         Revision r = (Revision) Serializer.deserialize(revisionPath.getKey().toString());
         r.checkout();
@@ -130,8 +150,60 @@ public class BranchManager extends RepoManager {
         return (Revision) Serializer.deserialize(revisionPath.getKey().toString());
     }
 
+    public String getBranchHeadFile(String branchPath) {
+        return String.join(File.separator, branchPath, "head");
+    }
+
+    public enum BranchCreationResult {
+        SUCCESS,
+        ERROR_CREATING_BRANCH,
+        BRANCH_ALREADY_EXISTS
+    }
+
+    public BranchCreationResult createBranch(String branchName) throws IOException {
+        if (branchExists(branchName)) {
+            return BranchCreationResult.BRANCH_ALREADY_EXISTS;
+        }
+
+        String branchPath = getBranchPath(branchName);
+        if (!Paths.get(branchPath).toFile().mkdirs())
+            return BranchCreationResult.ERROR_CREATING_BRANCH;
+
+        FileUtils.copyFile(FileUtils.getFile(getHeadFile()),
+                FileUtils.getFile(getBranchHeadFile(branchPath)));
+
+        return BranchCreationResult.SUCCESS;
+    }
+
+
+    public enum BranchDeletionResult {
+        SUCCESS,
+        BRANCH_DOESNT_EXIST
+    }
+
+    public BranchDeletionResult deleteBranch(String branchName) throws IOException {
+        if (!branchExists(branchName)) {
+            return BranchDeletionResult.BRANCH_DOESNT_EXIST;
+        }
+
+        String branchPath = getBranchPath(branchName);
+
+        FileUtils.deleteDirectory(FileUtils.getFile(branchPath));
+
+        if (getCurrentBranch().equals(branchName)) {
+            String s = getCurrentBranchFile();
+            FileUtils.write(FileUtils.getFile(s), ""); // detached head state
+        }
+
+        return BranchDeletionResult.SUCCESS;
+    }
+
     void updateHeads(String hash) throws IOException {
         FileUtils.write(Paths.get(getCurrentBranchPath(), "head").toFile(), hash);
         FileUtils.write(Paths.get(getHeadFile()).toFile(), hash);
+    }
+
+    public boolean isDetachedHead() throws IOException {
+        return getCurrentBranch().isEmpty();
     }
 }

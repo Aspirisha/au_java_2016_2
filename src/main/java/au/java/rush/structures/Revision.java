@@ -1,5 +1,6 @@
-package au.java.rush.utils;
+package au.java.rush.structures;
 
+import au.java.rush.utils.*;
 import com.google.common.hash.Hashing;
 import difflib.Patch;
 import difflib.PatchFailedException;
@@ -12,7 +13,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 
-import static au.java.rush.utils.Revision.ElementStatus.*;
+import static au.java.rush.structures.Revision.ElementStatus.*;
 import static java.nio.file.FileVisitResult.CONTINUE;
 
 /**
@@ -29,13 +30,15 @@ public class Revision implements Serializable {
 
     private static class DirElement implements Serializable {
         public DirElement() {}
-        public DirElement(ElementStatus es, ArrayList<String> prevModifyingRevisions) {
+        public DirElement(ElementStatus es, ArrayList<String> prevModifyingRevisions, boolean hasLastLineEmpty) {
             status = es;
             this.prevModifyingRevisions = prevModifyingRevisions;
+            this.hasLastLineEmpty = hasLastLineEmpty;
         }
 
         ElementStatus status;
         ArrayList<String> prevModifyingRevisions;
+        boolean hasLastLineEmpty;
     }
 
     private String ownHash;
@@ -108,6 +111,7 @@ public class Revision implements Serializable {
                     DirElement updatedElement = k.getValue();
                     if (dirStructure.containsKey(key)) {
                         updatedElement.status = MODIFIED;
+                        updatedElement.hasLastLineEmpty = dirStructure.get(key).hasLastLineEmpty;
                     } else {
                         updatedElement.status = deletedFiles.contains(key) ? DELETED : UNMODIFIED;
                     }
@@ -135,16 +139,24 @@ public class Revision implements Serializable {
         logger = LoggerFactory.getLogger(Revision.class);
     }
 
-    private void createNewDirectoryStructure() throws IOException {
+    private void createNewDirectoryStructure() throws IOException, ClassNotFoundException {
         Path indexRoot = Paths.get(rm.getIndexDir());
 
+        IndexManager im = new IndexManager(repoRoot.toString());
+        HashMap<String, Boolean> lineEndings = (HashMap<String, Boolean>) Serializer.deserialize(im.getLineEndingsFile());
         class DirectoryStructureCreator extends SimpleFileVisitor<Path> {
             @Override
             public FileVisitResult visitFile(Path file,
-                                             BasicFileAttributes attr) {
+                                             BasicFileAttributes attr) throws IOException {
 
                 if (attr.isRegularFile() && !attr.isDirectory()) {
-                    dirStructure.put(indexRoot.relativize(file).toString(), new DirElement(ElementStatus.NEW, new ArrayList<String>()));
+                    String data = FileUtils.readFileToString(file.toFile());
+                    logger.debug(indexRoot.relativize(file).toString());
+                    boolean hasLastLineEmpty = lineEndings.get(indexRoot.relativize(file).toString());
+                    logger.debug(String.format("file %s ends with newline: %b", file.toString(), hasLastLineEmpty));
+                    logger.debug(data);
+                    dirStructure.put(indexRoot.relativize(file).toString(),
+                            new DirElement(ElementStatus.NEW, new ArrayList<String>(), hasLastLineEmpty));
                 }
                 return CONTINUE;
             }
@@ -176,7 +188,17 @@ public class Revision implements Serializable {
             }
             List<String> fileContents = getFileContents(rm.getFilePathRelativeToRoot(f));
 
-            FileUtils.writeLines(repoRoot.resolve(f).toFile(), fileContents);
+            File file = repoRoot.resolve(f).toFile();
+            logger.info(String.format("file %s has last line empty: %b", e.getKey(), de.hasLastLineEmpty));
+            if (de.hasLastLineEmpty) {
+                FileUtils.writeLines(file, fileContents);
+                continue;
+            } else if (fileContents.size() > 1) {
+                FileUtils.writeLines(file, fileContents.subList(0, fileContents.size() - 1));
+                FileUtils.write(file, fileContents.get(fileContents.size() - 1), true);
+            } else {
+                FileUtils.write(file, fileContents.get(fileContents.size() - 1));
+            }
         }
     }
 
@@ -205,6 +227,7 @@ public class Revision implements Serializable {
             }
         }
 
+        dirStructure.put(fileName.toString(), de);
         return data;
     }
 
