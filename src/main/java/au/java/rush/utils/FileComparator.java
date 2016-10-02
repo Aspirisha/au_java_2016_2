@@ -60,7 +60,6 @@ public class FileComparator {
         final List<String> revisedFileLines = fileToLines(revised);
 
         final Patch patch = DiffUtils.diff(originalFileLines, revisedFileLines);
-
         return patch.getDeltas();
     }
 

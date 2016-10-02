@@ -49,7 +49,7 @@ public class RepoManager {
         return Files.exists(Paths.get(p)) ? p : null;
     }
 
-    public PathRelativeToRoot getFilePathRelativeToRoot(String fileName) {
+    public String getFilePathRelativeToRoot(String fileName) {
         String absolutePath = getFilePathAbsolute(fileName);
         int prefixIndex = absolutePath.indexOf(repoRoot);
 
@@ -57,7 +57,7 @@ public class RepoManager {
             return null;
         }
         Path relative = Paths.get(repoRoot).relativize(Paths.get(absolutePath));
-        return new PathRelativeToRoot(relative);
+        return relative.toString();
     }
 
     private String findFileAbsolutePath(String toolName) {
@@ -124,6 +124,9 @@ public class RepoManager {
 
     public String getCurrentBranchFile() {
         return String.join(File.separator, getInternalRoot(), "current-branch");
+    }
+    public String getLineEndingsFile() {
+        return Paths.get(getInternalRoot(), "line-endings").toString();
     }
 
 }

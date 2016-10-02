@@ -128,6 +128,7 @@ public class BranchManager extends RepoManager {
         logger.info("revision path = " + revisionPath.getKey());
         if (revisionPath.getValue() && !hasHeadRevision(branchOrRevision)) {
             setCurrentBranch(branchOrRevision);
+            updateHeads("");
             return;
         }
 
@@ -137,6 +138,7 @@ public class BranchManager extends RepoManager {
         if (revisionPath.getValue()) {
             setCurrentBranch(branchOrRevision);
         }
+        updateHeads(r.getHash());
     }
 
     public Revision getRevisionByHash(String hash) throws IOException, ClassNotFoundException {
@@ -147,6 +149,7 @@ public class BranchManager extends RepoManager {
     public Revision getRevisionByHashOrBranch(String branchOrRevision) throws IOException, ClassNotFoundException {
         Pair<Path, Boolean> revisionPath =
                 getRevisionPathByBranchOrRevisionName(branchOrRevision);
+        logger.debug("revision path = " + revisionPath.getKey());
         return (Revision) Serializer.deserialize(revisionPath.getKey().toString());
     }
 
@@ -205,5 +208,16 @@ public class BranchManager extends RepoManager {
 
     public boolean isDetachedHead() throws IOException {
         return getCurrentBranch().isEmpty();
+    }
+
+    public void merge(String branchOrRevision) throws IOException, ClassNotFoundException, PatchFailedException {
+        Pair<Path, Boolean> revisionPath =
+                getRevisionPathByBranchOrRevisionName(branchOrRevision);
+
+        Revision other = (Revision) Serializer.deserialize(revisionPath.getKey().toString());
+
+        Revision currentHead = getHeadRevision();
+
+        currentHead.merge(other);
     }
 }

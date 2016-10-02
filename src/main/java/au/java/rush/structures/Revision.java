@@ -1,7 +1,11 @@
 package au.java.rush.structures;
 
-import au.java.rush.utils.*;
+import au.java.rush.utils.BranchManager;
+import au.java.rush.utils.FileHasher;
+import au.java.rush.utils.IndexManager;
+import au.java.rush.utils.Serializer;
 import com.google.common.hash.Hashing;
+import difflib.DiffUtils;
 import difflib.Patch;
 import difflib.PatchFailedException;
 import org.apache.commons.io.FileUtils;
@@ -12,20 +16,23 @@ import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static au.java.rush.structures.Revision.ElementStatus.*;
+import static difflib.DiffUtils.diff;
 import static java.nio.file.FileVisitResult.CONTINUE;
 
 /**
  * Created by andy on 9/25/16.
  */
 public class Revision implements Serializable {
-    enum ElementStatus implements Serializable {
+    public enum ElementStatus implements Serializable {
         NEW,
         MODIFIED,
         UNMODIFIED,
         DELETED,
-        DELETED_EARLIER
+        DELETED_EARLIER,
+        NOT_TRACKED;
     }
 
     private static class DirElement implements Serializable {
@@ -44,9 +51,10 @@ public class Revision implements Serializable {
     private String ownHash;
     String parentHash; // it is empty for the first revision
     String message;
-    HashMap<String, DirElement> dirStructure;
+    HashMap<String, DirElement> dirStructure; // key is file name relative to repo root
+    int depth; // number of revisions from this to first revision (0 for first revision)
     transient Path repoRoot;
-    transient RepoManager rm;
+    transient BranchManager bm;
     transient Path revisionsPath;
     private transient Logger logger;
 
@@ -65,12 +73,25 @@ public class Revision implements Serializable {
         return message;
     }
 
+    public static Revision getTempIndexRevision(Path repoRoot) throws IOException, ClassNotFoundException {
+        return new Revision(repoRoot, null);
+    }
+
     // creates revision from index
     public Revision(Path repoRoot, String message) throws IOException, ClassNotFoundException {
-        BranchManager bm = new BranchManager(repoRoot.toString());
-        this.parentHash = bm.getHeadRevisionHash();
         this.repoRoot = repoRoot;
         this.message = message;
+
+        initTransientFields();
+        this.parentHash = bm.getHeadRevisionHash();
+
+
+        if (!parentHash.isEmpty()) {
+            Revision parent = bm.getRevisionByHash(parentHash);
+            depth = parent.depth + 1;
+        } else {
+            depth = 0;
+        }
         String filesHash = FileHasher.getDirectoryOrFileHash(bm.getIndexDir(),
                 Paths.get(bm.getIndexDir())).toString();
 
@@ -78,7 +99,6 @@ public class Revision implements Serializable {
         ownHash = String.valueOf(Hashing.md5().hashString(filesHash + parentHash));
         dirStructure = new HashMap<>();
 
-        initTransientFields();
         // create directory structure
         if (parentHash == null) {
             createNewDirectoryStructure();
@@ -90,9 +110,46 @@ public class Revision implements Serializable {
         logger.debug("New revision's parent is " + parentHash);
     }
 
+    public Map<String, ElementStatus> getModifiedFiles() {
+        return dirStructure.entrySet().stream()
+                .filter(e -> e.getValue().status != DELETED_EARLIER &&
+                        e.getValue().status != UNMODIFIED)
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                s -> s.getValue().status));
+    }
+
+    public Map<String, ElementStatus> getModifiedRelativeToIndexFiles() throws PatchFailedException, IOException, ClassNotFoundException {
+        Map<String, ElementStatus> result = new HashMap<>();
+        for (Map.Entry<String, DirElement> k : dirStructure.entrySet()) {
+            final String fileName = k.getKey();
+            List<String> myContent = getFileContents(fileName);
+
+            File absoluteFile = repoRoot.resolve(fileName).toFile();
+            if (!absoluteFile.exists()) {
+                if (myContent != null) {
+                    result.put(fileName, DELETED);
+                }
+                continue;
+            }
+
+            if (myContent == null) {
+                result.put(fileName, NEW);
+                continue;
+            }
+
+            List<String> currentContent = FileUtils.readLines(absoluteFile);
+            Patch<String> p = DiffUtils.diff(myContent, currentContent);
+            if (!p.getDeltas().isEmpty()) {
+                result.put(fileName, MODIFIED);
+            }
+        }
+
+        return result;
+    }
+
     private void createDirectoryStructureFromParent() throws IOException, ClassNotFoundException {
         Revision parent;
-        String parentRevisionFile = rm.getRevisionFile(parentHash);
+        String parentRevisionFile = bm.getRevisionFile(parentHash);
         if (!FileUtils.getFile(parentRevisionFile).exists())
             return;
 
@@ -134,16 +191,23 @@ public class Revision implements Serializable {
     }
 
     private void initTransientFields() {
-        rm = new RepoManager(repoRoot.toString());
-        revisionsPath = Paths.get(rm.getRevisionsDir());
+        bm = new BranchManager(repoRoot.toString());
+        revisionsPath = Paths.get(bm.getRevisionsDir());
         logger = LoggerFactory.getLogger(Revision.class);
     }
 
     private void createNewDirectoryStructure() throws IOException, ClassNotFoundException {
-        Path indexRoot = Paths.get(rm.getIndexDir());
+        Path indexRoot = Paths.get(bm.getIndexDir());
 
         IndexManager im = new IndexManager(repoRoot.toString());
-        HashMap<String, Boolean> lineEndings = (HashMap<String, Boolean>) Serializer.deserialize(im.getLineEndingsFile());
+        final HashMap<String, Boolean> lineEndings = new HashMap<>();
+
+        try {
+            lineEndings.putAll((HashMap<String, Boolean>) Serializer.deserialize(
+                    im.getLineEndingsFile()));
+        } catch (IOException e) {
+            logger.debug("", e);
+        }
         class DirectoryStructureCreator extends SimpleFileVisitor<Path> {
             @Override
             public FileVisitResult visitFile(Path file,
@@ -168,27 +232,27 @@ public class Revision implements Serializable {
 
     public void checkout() throws PatchFailedException, IOException, ClassNotFoundException {
         for (Map.Entry<String, DirElement> e : dirStructure.entrySet()) {
-            String f = e.getKey();
+            String fileName = e.getKey();
             DirElement de = e.getValue();
 
             if (de.status == DELETED || de.status == DELETED_EARLIER) {
-                Path p = Paths.get(rm.getFilePathAbsolute(f));
+                Path p = Paths.get(bm.getFilePathAbsolute(fileName));
 
                 if (!Files.exists(p) || Files.isDirectory(p)) {
                     continue;
                 }
 
                 try {
-                    Files.delete(Paths.get(rm.getFilePathAbsolute(f)));
+                    Files.delete(Paths.get(bm.getFilePathAbsolute(fileName)));
                 } catch (DirectoryNotEmptyException x) { // impossible unless some miracle
                     x.printStackTrace();
                 }
 
                 continue;
             }
-            List<String> fileContents = getFileContents(rm.getFilePathRelativeToRoot(f));
+            List<String> fileContents = getFileContents(bm.getFilePathRelativeToRoot(fileName));
 
-            File file = repoRoot.resolve(f).toFile();
+            File file = repoRoot.resolve(fileName).toFile();
             logger.info(String.format("file %s has last line empty: %b", e.getKey(), de.hasLastLineEmpty));
             if (de.hasLastLineEmpty) {
                 FileUtils.writeLines(file, fileContents);
@@ -202,32 +266,133 @@ public class Revision implements Serializable {
         }
     }
 
-    public List<String> getFileContents(RepoManager.PathRelativeToRoot fileName) throws IOException, ClassNotFoundException, PatchFailedException {
-        if (!dirStructure.containsKey(fileName.toString()))
+    private Revision findLCA(Revision other) throws IOException, ClassNotFoundException {
+        Revision currentPredecessor = this;
+        while (other.depth > currentPredecessor.depth) {
+            other = bm.getRevisionByHash(other.getHash());
+        }
+
+        while (other.depth < currentPredecessor.depth) {
+            currentPredecessor = bm.getRevisionByHash(currentPredecessor.getHash());
+        }
+
+        while (!other.getHash().equals(currentPredecessor.getHash()) && other.depth > 0) {
+            other = bm.getRevisionByHash(other.getHash());
+            currentPredecessor = bm.getRevisionByHash(currentPredecessor.getHash());
+        }
+
+        if (!other.getHash().equals(currentPredecessor.getHash()))
+            return null;
+        return other;
+    }
+
+    public void merge(Revision other) throws IOException, PatchFailedException, ClassNotFoundException {
+        Path mergeResultPath = repoRoot.resolve("merge-result");
+
+        for (Map.Entry<String, DirElement> e : dirStructure.entrySet()) {
+            String fileName = e.getKey();
+            DirElement de = e.getValue();
+            File absoluteFilePath = repoRoot.resolve(fileName).toFile();
+
+            if (de.status == DELETED || de.status == DELETED_EARLIER) {
+                Path p = Paths.get(bm.getFilePathAbsolute(fileName));
+
+                if (!Files.exists(p) || Files.isDirectory(p)) {
+                    continue;
+                }
+
+                try {
+                    Files.delete(Paths.get(bm.getFilePathAbsolute(fileName)));
+                } catch (DirectoryNotEmptyException x) { // impossible unless some miracle
+                    x.printStackTrace();
+                }
+
+                ElementStatus otherStatus = other.getStatusForFile(fileName);
+                switch (otherStatus) {
+                    case DELETED:
+                    case DELETED_EARLIER:
+                    case NOT_TRACKED:
+                        continue;
+                }
+                List<String> otherContent = other.getFileContents(fileName);
+
+                FileUtils.writeLines(absoluteFilePath, otherContent);
+                continue;
+            }
+            List<String> ownContent = getFileContents(fileName);
+            ElementStatus otherStatus = other.getStatusForFile(fileName);
+            switch (otherStatus) {
+                case DELETED:
+                case DELETED_EARLIER:
+                case NOT_TRACKED:
+                    FileUtils.writeLines(absoluteFilePath, ownContent);
+                    continue;
+            }
+
+            List<String> otherContent = other.getFileContents(fileName);
+            Patch<String> p = diff(ownContent, otherContent);
+            if (p.getDeltas().isEmpty()) {
+                FileUtils.writeLines(absoluteFilePath, ownContent);
+                continue;
+            }
+
+            List<String> diff = DiffUtils.generateUnifiedDiff(ownHash,
+                    other.getHash(), ownContent, p, 1000000);
+
+            FileUtils.writeLines(absoluteFilePath, diff);
+        }
+
+        for (Map.Entry<String, DirElement> e : other.dirStructure.entrySet()) {
+            String fileName = e.getKey();
+            DirElement de = e.getValue();
+
+            if (dirStructure.containsKey(fileName) || de.status == DELETED
+                    || de.status == DELETED_EARLIER)
+                continue;
+
+            File absoluteFilePath = repoRoot.resolve(fileName).toFile();
+            List<String> otherContent = other.getFileContents(fileName);
+            FileUtils.writeLines(absoluteFilePath, otherContent);
+        }
+    }
+
+    public List<String> getFileContents(String fileName) throws IOException, ClassNotFoundException, PatchFailedException {
+        if (!dirStructure.containsKey(fileName))
             return null;
 
-        logger.debug("Reading contents of " + fileName);
-        DirElement de = dirStructure.get(fileName.toString());
+        switch (dirStructure.get(fileName).status) {
+            case DELETED:
+            case DELETED_EARLIER:
+                return null;
+        }
 
-        Path firstRevisionCommit = Paths.get(rm.getCommitPath(de.prevModifyingRevisions.get(0)));
-        Path commitedFile = firstRevisionCommit.resolve(fileName.path);
+        logger.debug("Reading contents of " + fileName);
+        DirElement de = dirStructure.get(fileName);
+
+        Path firstRevisionCommit = null;
+
+        if (!de.prevModifyingRevisions.isEmpty())
+            firstRevisionCommit = Paths.get(bm.getCommitPath(de.prevModifyingRevisions.get(0)));
+        else
+            firstRevisionCommit = Paths.get(bm.getIndexDir());
+        Path commitedFile = firstRevisionCommit.resolve(fileName);
 
         List<String> data = FileUtils.readLines(commitedFile.toFile());
 
         for (int i = 1; i < de.prevModifyingRevisions.size(); i++) {
             String revisionHash = de.prevModifyingRevisions.get(i);
-            Path commitPath = Paths.get(rm.getCommitPath(revisionHash));
-            Path revisionPath = Paths.get(rm.getRevisionFile(revisionHash));
+            Path commitPath = Paths.get(bm.getCommitPath(revisionHash));
+            Path revisionPath = Paths.get(bm.getRevisionFile(revisionHash));
 
             Revision r = (Revision) Serializer.deserialize(revisionPath.toString());
-            if (r.dirStructure.get(fileName.toString()).status == DELETED) {
+            if (r.dirStructure.get(fileName).status == DELETED) {
                 data.clear();
             } else {
-                data = applyPatch(commitPath.resolve(fileName.path), data);
+                data = applyPatch(commitPath.resolve(fileName), data);
             }
         }
 
-        dirStructure.put(fileName.toString(), de);
+        dirStructure.put(fileName, de);
         return data;
     }
 
@@ -271,4 +436,10 @@ public class Revision implements Serializable {
         initTransientFields();
     }
 
+    public ElementStatus getStatusForFile(String fileName) {
+        DirElement de = dirStructure.get(fileName);
+        if (de == null)
+            return NOT_TRACKED;
+        return de.status;
+    }
 }

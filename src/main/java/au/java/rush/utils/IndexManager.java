@@ -11,13 +11,11 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
 import static java.nio.file.FileVisitResult.CONTINUE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static javafx.scene.input.KeyCode.T;
 
 /**
  * Created by andy on 9/25/16.
@@ -108,10 +106,10 @@ public class IndexManager extends RepoManager {
                 return PatchCreationResult.NO_SUCH_FILE;
             }
 
-            PathRelativeToRoot relPath = manager.getFilePathRelativeToRoot(fileName);
+            String relPath = manager.getFilePathRelativeToRoot(fileName);
 
             if (currentFile == null) {
-                deletedFiles.add(relPath.toString());
+                deletedFiles.add(relPath);
                 return PatchCreationResult.SUCCESS;
             }
 
@@ -119,7 +117,7 @@ public class IndexManager extends RepoManager {
             String data = FileUtils.readFileToString(
                     FileUtils.getFile(manager.getFilePathAbsolute(fileName)));
 
-            lineEndings.put(relPath.toString(), data.isEmpty() || data.endsWith("\n"));
+            lineEndings.put(relPath, data.isEmpty() || data.endsWith("\n"));
 
             String indexPath = getFileIndex(relPath);
             if (revisionFile == null) {
@@ -143,9 +141,6 @@ public class IndexManager extends RepoManager {
         return Paths.get(getInternalRoot(), "deleted").toString();
     }
 
-    public String getLineEndingsFile() {
-        return Paths.get(getInternalRoot(), "line-endings").toString();
-    }
     /**
      *
      * @param fileOrDir relative to repoRoot path
@@ -156,6 +151,7 @@ public class IndexManager extends RepoManager {
 
         BranchManager bm = new BranchManager(repoRoot);
         Revision r = bm.hasHeadRevision() ? bm.getHeadRevision() : null;
+
         LoggerFactory.getLogger(IndexManager.class).debug("Head revision is " +
                 (r == null ? "null" : r.getHash()));
         PatchCreator pf = new PatchCreator(bm, r);
@@ -164,10 +160,10 @@ public class IndexManager extends RepoManager {
         Serializer.serialize(pf.lineEndings, getLineEndingsFile());
     }
 
-    public String getFileIndex(PathRelativeToRoot file) {
-        return String.join(File.separator, getIndexDir(), file.path.toString());
+    // file - path relative to root
+    public String getFileIndex(String file) {
+        return String.join(File.separator, getIndexDir(), file);
     }
-
     /**
      *
      * @param fileName relative to root name
@@ -209,10 +205,66 @@ public class IndexManager extends RepoManager {
         Files.createDirectories(commitDir.getParent());
 
         Serializer.serialize(r, getRevisionFile(hash));
-        FileUtils.moveDirectory(new File(getIndexDir()), commitDir.toFile());
+
+        File index = new File(getIndexDir());
+        FileUtils.moveDirectory(index, commitDir.toFile());
+        index.mkdirs();
 
         BranchManager bm = new BranchManager(repoRoot);
         bm.updateHeads(hash);
         return hash;
+    }
+
+    class UntrackedFilesGetter extends SimpleFileVisitor<Path> {
+        final Path repoRoot;
+        final Revision indexRevision;
+        private List<String> result;
+
+        UntrackedFilesGetter(Path repoRoot, Revision r) {
+            this.repoRoot = repoRoot;
+            indexRevision = r;
+            result = new ArrayList<>();
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+            if (repoRoot.resolve(".rush").equals(dir))
+                return FileVisitResult.SKIP_SUBTREE;
+            return CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file,
+                                         BasicFileAttributes attr) {
+            if (attr.isRegularFile() && !attr.isDirectory()) {
+                String fileName = repoRoot.relativize(file).toString();
+                if (indexRevision.getStatusForFile(fileName) == Revision.ElementStatus.NOT_TRACKED) {
+                    result.add(fileName);
+                }
+            }
+            return CONTINUE;
+        }
+
+        List<String> getResult() {
+            return result;
+        }
+    }
+
+    public Map<String, Revision.ElementStatus> getCurrentlyIndexedFiles() throws IOException, ClassNotFoundException {
+        Revision r = Revision.getTempIndexRevision(Paths.get(repoRoot));
+        return r.getModifiedFiles();
+    }
+
+    public Map<String, Revision.ElementStatus> getCurrentlyModifiedFiles() throws IOException, ClassNotFoundException, PatchFailedException {
+        Revision r = Revision.getTempIndexRevision(Paths.get(repoRoot));
+        return r.getModifiedRelativeToIndexFiles();
+    }
+
+    public List<String> getUntrackedFiles() throws IOException, ClassNotFoundException {
+        Revision r = Revision.getTempIndexRevision(Paths.get(repoRoot));
+        UntrackedFilesGetter ufg = new UntrackedFilesGetter(Paths.get(repoRoot), r);
+        Files.walkFileTree(Paths.get(repoRoot), ufg);
+
+        return ufg.getResult();
     }
 }

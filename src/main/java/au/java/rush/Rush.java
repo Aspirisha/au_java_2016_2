@@ -79,6 +79,10 @@ public class Rush {
                 .type(String.class)
                 .help("revision to diff with");
 
+        Subparser parserStatus = subparsers.addParser("status")
+                .help("status help")
+                .setDefault("func", new StatusCommand());
+
         try {
             Namespace ns = parser.parseArgs(args);
             ((Subcommand) ns.get("func")).execute(ns);
