@@ -65,6 +65,10 @@ public class Rush {
                 .help("init help")
                 .setDefault("func", new InitCommand());
 
+        Subparser parserClean = subparsers.addParser("clean")
+                .help("clean help")
+                .setDefault("func", new CleanCommand());
+
         Subparser parserAdd = subparsers.addParser("add").help("add help")
                 .setDefault("func", new AddCommand());
         parserAdd.addArgument("fileOrDirectory")

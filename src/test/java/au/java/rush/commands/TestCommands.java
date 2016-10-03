@@ -147,4 +147,29 @@ public class TestCommands {
         FileUtils.deleteQuietly(repoRoot.resolve("subdir").toFile());
         assertEquals(2, im.getCurrentlyModifiedFiles().size());
     }
+
+    @Test
+    public void cleanTest() throws IOException, ClassNotFoundException {
+        File file1 = repoRoot.resolve("file1.txt").toFile();
+
+        Path file2path = repoRoot.resolve("subdir").resolve("file2.txt");
+        Path file3path = repoRoot.resolve("subdir").resolve("file3.txt");
+
+        File file2 = file2path.toFile();
+        File file3 = file3path.toFile();
+        final String s = "some text";
+        FileUtils.write(file1, s);
+        FileUtils.write(file2, s);
+        FileUtils.write(file3, s);
+        Rush.main(new String[]{"add", repoRoot.relativize(file2path).toString()});
+
+        IndexManager im = new IndexManager(repoRoot.toString());
+        assertEquals(2, im.getUntrackedFiles().size());
+        assertEquals(1, im.getCurrentlyIndexedFiles().size());
+        assertTrue(im.getCurrentlyIndexedFiles()
+                .containsKey(repoRoot.relativize(file2path).toString()));
+
+        Rush.main(new String[]{"clean"});
+        assertTrue(im.getUntrackedFiles().isEmpty());
+    }
 }
