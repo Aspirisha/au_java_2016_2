@@ -125,8 +125,4 @@ public class RepoManager {
     public String getCurrentBranchFile() {
         return String.join(File.separator, getInternalRoot(), "current-branch");
     }
-    public String getLineEndingsFile() {
-        return Paths.get(getInternalRoot(), "line-endings").toString();
-    }
-
 }

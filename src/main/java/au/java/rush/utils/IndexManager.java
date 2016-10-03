@@ -15,7 +15,6 @@ import java.util.*;
 
 import static java.nio.file.FileVisitResult.CONTINUE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static javafx.scene.input.KeyCode.T;
 
 /**
  * Created by andy on 9/25/16.
@@ -35,24 +34,27 @@ public class IndexManager extends RepoManager {
         SUCCESS
     }
 
+    public HashSet<String> getDeletedFiles() {
+        try {
+            return (HashSet<String>) Serializer.deserialize(getDeletedFilesFile());
+        } catch (IOException | ClassNotFoundException e) {
+            return new HashSet<>();
+        }
+    }
 
     class PatchCreator extends SimpleFileVisitor<Path> {
-        final RepoManager manager;
+        final IndexManager manager;
         final Revision revision;
         HashSet<String> deletedFiles = null;
         private List<Path> failedToIndexFiles;
         HashMap<String, Boolean> lineEndings;
 
-        PatchCreator(RepoManager manager, Revision revision) {
+        PatchCreator(IndexManager manager, Revision revision) {
             this.manager = manager;
             this.revision = revision;
             failedToIndexFiles = new ArrayList<>();
 
-            try {
-                deletedFiles = (HashSet<String>) Serializer.deserialize(getDeletedFilesFile());
-            } catch (IOException | ClassNotFoundException e) {
-                deletedFiles = new HashSet<>();
-            }
+            deletedFiles = manager.getDeletedFiles();
 
             try {
                 lineEndings = (HashMap<String, Boolean>) Serializer.deserialize(getLineEndingsFile());
@@ -110,6 +112,10 @@ public class IndexManager extends RepoManager {
 
             if (currentFile == null) {
                 deletedFiles.add(relPath);
+                File maybeIndexed = Paths.get(indexRoot).resolve(relPath).toFile();
+                if (maybeIndexed.exists()) {
+                    FileUtils.deleteQuietly(maybeIndexed);
+                }
                 return PatchCreationResult.SUCCESS;
             }
 
@@ -120,6 +126,7 @@ public class IndexManager extends RepoManager {
             lineEndings.put(relPath, data.isEmpty() || data.endsWith("\n"));
 
             String indexPath = getFileIndex(relPath);
+            deletedFiles.remove(relPath);
             if (revisionFile == null) {
                 Files.createDirectories(Paths.get(indexPath).getParent());
                 Files.copy(Paths.get(manager.getFilePathAbsolute(fileName)),
@@ -128,9 +135,9 @@ public class IndexManager extends RepoManager {
             }
 
             Patch p = DiffUtils.diff(revision.getFileContents(relPath), currentFile);
-            deletedFiles.remove(relPath.toString());
 
-            // TODO if p is not empty, else don't write patch
+            if (p.getDeltas().isEmpty())
+                return PatchCreationResult.SUCCESS;
             Files.createDirectories(Paths.get(indexPath).getParent());
             Serializer.serialize(p, indexPath);
             return PatchCreationResult.SUCCESS;
@@ -152,12 +159,29 @@ public class IndexManager extends RepoManager {
         BranchManager bm = new BranchManager(repoRoot);
         Revision r = bm.hasHeadRevision() ? bm.getHeadRevision() : null;
 
-        LoggerFactory.getLogger(IndexManager.class).debug("Head revision is " +
+        logger.debug("Head revision is " +
                 (r == null ? "null" : r.getHash()));
-        PatchCreator pf = new PatchCreator(bm, r);
-        Files.walkFileTree(startingDir, pf);
-        Serializer.serialize(pf.deletedFiles, getDeletedFilesFile());
-        Serializer.serialize(pf.lineEndings, getLineEndingsFile());
+
+        if (startingDir.toFile().exists()) {
+            PatchCreator pf = new PatchCreator(this, r);
+            Files.walkFileTree(startingDir, pf);
+            Serializer.serialize(pf.deletedFiles, getDeletedFilesFile());
+            Serializer.serialize(pf.lineEndings, getLineEndingsFile());
+        } else {
+            Revision indexRev = Revision.getTempIndexRevision(Paths.get(repoRoot));
+            Map<String, Revision.ElementStatus> files = indexRev.getNotDeletedFiles();
+            HashSet<String> deletedFiles = getDeletedFiles();
+            for (Map.Entry<String, Revision.ElementStatus> e : files.entrySet()) {
+                Path fileName = Paths.get(e.getKey());
+                if (!fileName.startsWith(fileName)) {
+                    continue;
+                }
+                deletedFiles.add(fileName.toString());
+                FileUtils.deleteQuietly(Paths.get(getIndexDir())
+                        .resolve(fileName).toFile());
+            }
+            Serializer.serialize(deletedFiles, getDeletedFilesFile());
+        }
     }
 
     // file - path relative to root
@@ -202,12 +226,15 @@ public class IndexManager extends RepoManager {
         Revision r = new Revision(Paths.get(repoRoot), message);
         String hash = r.getHash();
         Path commitDir = Paths.get(getCommitPath(hash));
-        Files.createDirectories(commitDir.getParent());
+        Path revisionDir = commitDir.getParent();
+        Files.createDirectories(revisionDir);
 
         Serializer.serialize(r, getRevisionFile(hash));
 
         File index = new File(getIndexDir());
         FileUtils.moveDirectory(index, commitDir.toFile());
+        FileUtils.copyFileToDirectory(FileUtils.getFile(getDeletedFilesFile()), revisionDir.toFile());
+        FileUtils.copyFileToDirectory(FileUtils.getFile(getLineEndingsFile()), revisionDir.toFile());
         index.mkdirs();
 
         BranchManager bm = new BranchManager(repoRoot);
@@ -250,12 +277,12 @@ public class IndexManager extends RepoManager {
         }
     }
 
-    public Map<String, Revision.ElementStatus> getCurrentlyIndexedFiles() throws IOException, ClassNotFoundException {
+    public Map<String, Revision.ModificationWithRepsectToParentRevisionType> getCurrentlyIndexedFiles() throws IOException, ClassNotFoundException {
         Revision r = Revision.getTempIndexRevision(Paths.get(repoRoot));
         return r.getModifiedFiles();
     }
 
-    public Map<String, Revision.ElementStatus> getCurrentlyModifiedFiles() throws IOException, ClassNotFoundException, PatchFailedException {
+    public Map<String, Revision.ModificationWithRepsectToIndexType> getCurrentlyModifiedFiles() throws IOException, ClassNotFoundException, PatchFailedException {
         Revision r = Revision.getTempIndexRevision(Paths.get(repoRoot));
         return r.getModifiedRelativeToIndexFiles();
     }
@@ -266,5 +293,9 @@ public class IndexManager extends RepoManager {
         Files.walkFileTree(Paths.get(repoRoot), ufg);
 
         return ufg.getResult();
+    }
+
+    public String getLineEndingsFile() {
+        return Paths.get(getInternalRoot(), "line-endings").toString();
     }
 }

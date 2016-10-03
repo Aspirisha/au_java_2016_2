@@ -11,6 +11,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashSet;
 
 /**
  * Created by andy on 9/25/16.
@@ -126,6 +127,24 @@ public class BranchManager extends RepoManager {
                 getRevisionPathByBranchOrRevisionName(branchOrRevision);
 
         logger.info("revision path = " + revisionPath.getKey());
+        FileUtils.cleanDirectory(FileUtils.getFile(getIndexDir()));
+        try {
+            FileUtils.copyFileToDirectory(revisionPath.getKey()
+                            .resolve("deleted").toFile(),
+                    FileUtils.getFile(getInternalRoot()));
+        } catch (IOException e) {
+            logger.error("", e);
+        }
+
+        try {
+            FileUtils.copyFileToDirectory(revisionPath.getKey()
+                            .resolve("line-endings").toFile(),
+                    FileUtils.getFile(getInternalRoot()));
+        } catch (IOException e) {
+            logger.error("", e);
+        }
+
+
         if (revisionPath.getValue() && !hasHeadRevision(branchOrRevision)) {
             setCurrentBranch(branchOrRevision);
             updateHeads("");
@@ -219,5 +238,17 @@ public class BranchManager extends RepoManager {
         Revision currentHead = getHeadRevision();
 
         currentHead.merge(other);
+    }
+
+    public HashSet<String> getRevisionsDeletedFiles(String hash) throws IOException, ClassNotFoundException {
+        Pair<Path, Boolean> revisionPath =
+                getRevisionPathByBranchOrRevisionName(hash);
+        try {
+            return (HashSet<String>) Serializer.deserialize(revisionPath
+                    .getKey().resolve("deleted").toString());
+        } catch (IOException e) {
+            logger.error("", e);
+            return new HashSet<>();
+        }
     }
 }

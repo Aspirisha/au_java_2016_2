@@ -3,11 +3,8 @@ package au.java.rush.commands;
 import au.java.rush.Rush;
 import au.java.rush.utils.BranchManager;
 import au.java.rush.utils.IndexManager;
-import difflib.DiffUtils;
-import difflib.Patch;
 import difflib.PatchFailedException;
 import org.apache.commons.io.FileUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -15,10 +12,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
 
-import static difflib.DiffUtils.generateUnifiedDiff;
-import static javafx.scene.input.KeyCode.L;
+import static javafx.scene.input.KeyCode.R;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
 
@@ -117,7 +112,39 @@ public class TestCommands {
         assertEquals(1, im.getCurrentlyIndexedFiles().size());
         assertEquals(1, im.getCurrentlyModifiedFiles().size());
         assertTrue(im.getUntrackedFiles().isEmpty());
+    }
 
+    @Test
+    public void deleteTest() throws IOException, ClassNotFoundException, PatchFailedException {
+        File file1 = repoRoot.resolve("file1.txt").toFile();
+        File file2 = repoRoot.resolve("subdir").resolve("file2.txt").toFile();
+        File file3 = repoRoot.resolve("subdir").resolve("file3.txt").toFile();
+        final String s = "some text";
+        FileUtils.write(file1, s);
 
+        IndexManager im = new IndexManager(repoRoot.toString());
+        Rush.main(new String[]{"add", "file1.txt"});
+        FileUtils.deleteQuietly(file1);
+        assertEquals(1, im.getCurrentlyIndexedFiles().size());
+        assertEquals(1, im.getCurrentlyModifiedFiles().size());
+        assertTrue(im.getUntrackedFiles().isEmpty());
+
+        Rush.main(new String[]{"add", "file1.txt"});
+        // file was not in repo before so no info about it should now be saved
+        assertTrue(im.getCurrentlyIndexedFiles().isEmpty());
+        assertTrue(im.getCurrentlyModifiedFiles().isEmpty());
+        assertTrue(im.getUntrackedFiles().isEmpty());
+
+        FileUtils.write(file1, s);
+        FileUtils.write(file2, s);
+        FileUtils.write(file3, s);
+        Rush.main(new String[]{"add", "file1.txt"});
+        Rush.main(new String[]{"add", "subdir"});
+        Rush.main(new String[]{"commit", "-m", "message1"});
+
+        im.getUntrackedFiles().stream().forEach(System.out::println);
+        assertTrue(im.getUntrackedFiles().isEmpty());
+        FileUtils.deleteQuietly(repoRoot.resolve("subdir").toFile());
+        assertEquals(2, im.getCurrentlyModifiedFiles().size());
     }
 }

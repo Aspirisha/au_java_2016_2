@@ -26,8 +26,8 @@ public class StatusCommand extends AbstractCommand {
     @Override
     public void execute(Namespace args) {
         IndexManager im = new IndexManager(repo);
-        Map<String, Revision.ElementStatus> addedFiles;
-        Map<String, Revision.ElementStatus> modifiedFiles;
+        Map<String, Revision.ModificationWithRepsectToParentRevisionType> addedFiles;
+        Map<String, Revision.ModificationWithRepsectToIndexType> modifiedFiles;
         List<String> untrackedFiles;
         try {
             addedFiles = im.getCurrentlyIndexedFiles();
@@ -45,12 +45,13 @@ public class StatusCommand extends AbstractCommand {
             return;
         }
 
-        for (Map.Entry<String, Revision.ElementStatus> e : addedFiles.entrySet()) {
+        for (Map.Entry<String, Revision.ModificationWithRepsectToParentRevisionType> e : addedFiles.entrySet()) {
             System.out.format("%s%s \t %s%s\n", ANSI_GREEN, e.getValue().toString(),
                     e.getKey(), ANSI_RESET);
         }
 
-        for (Map.Entry<String, Revision.ElementStatus> e : modifiedFiles.entrySet()) {
+        for (Map.Entry<String, Revision.ModificationWithRepsectToIndexType> e
+                : modifiedFiles.entrySet()) {
             System.out.format("%s%s \t %s%s\n", ANSI_RED, e.getValue().toString(),
                     e.getKey(), ANSI_RESET);
         }
