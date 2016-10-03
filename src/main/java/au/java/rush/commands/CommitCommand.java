@@ -3,6 +3,8 @@ package au.java.rush.commands;
 import au.java.rush.utils.IndexManager;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,8 +16,11 @@ import java.nio.file.Paths;
  */
 public class CommitCommand extends AbstractCommand {
     CommitInteractionHandler iohandler = new CommitInteractionHandler();
+    Logger logger = LoggerFactory.getLogger(CommitCommand.class);
+
     @Override
     public void execute(Namespace args) {
+        logger.debug("COMMIT command");
         IndexManager im = new IndexManager(repo);
         if (!Files.exists(Paths.get(im.getInternalRoot()))) {
             iohandler.onRepositoryNotInitialized();
