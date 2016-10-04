@@ -11,4 +11,8 @@ public class AddInteractionHandler extends InteractionHandler {
     protected void onFileDoesntExist(String fileName) {
         System.out.println(String.format("pathspec '%s' did not match any files\n", fileName));
     }
+
+    protected void onTryingToAddRushDirectory() {
+        System.out.println("Can't add .rush directory to index");
+    }
 }

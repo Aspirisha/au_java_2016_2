@@ -2,6 +2,8 @@ package au.java.rush.commands;
 
 import au.java.rush.utils.IndexManager;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +15,7 @@ import java.nio.file.Paths;
  */
 public class AddCommand extends AbstractCommand {
     private AddInteractionHandler iohandler = new AddInteractionHandler();
+    private Logger logger = LoggerFactory.getLogger(AddCommand.class);
 
     @Override
     public void execute(Namespace args) {
@@ -29,7 +32,7 @@ public class AddCommand extends AbstractCommand {
         }
 
         if (Paths.get(fileOrDirToAdd).startsWith(".rush")) {
-            System.out.println("Can't add .rush directory to index");
+            iohandler.onTryingToAddRushDirectory();
             return;
         }
 
@@ -37,10 +40,10 @@ public class AddCommand extends AbstractCommand {
             im.createPatch(fileOrDirToAdd);
         } catch (IOException e) {
             System.out.println("Failed to add file " + fileOrDirToAdd + " to index");
-            e.printStackTrace();
+            logger.error("", e);
         } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            iohandler.onInternalRushError();
+            logger.error("", e);
         }
-
     }
 }
