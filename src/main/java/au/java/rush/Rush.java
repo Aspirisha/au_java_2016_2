@@ -50,7 +50,7 @@ public class Rush {
                 .metavar("revision")
                 .type(String.class)
                 .nargs("?")
-                .help("branch name pr revision hash code")
+                .help("branch name or revision hash code")
                 .setDefault((Object)null);
 
         Subparser parserMerge = subparsers.addParser("merge")
@@ -68,6 +68,15 @@ public class Rush {
         Subparser parserClean = subparsers.addParser("clean")
                 .help("clean help")
                 .setDefault("func", new CleanCommand());
+
+        Subparser parserReset = subparsers.addParser("reset")
+                .help("reset help")
+                .setDefault("func", new ResetCommand());
+        parserReset.addArgument("fileName")
+                .metavar("filename")
+                .nargs("?")
+                .type(String.class)
+                .help("file name to reset");
 
         Subparser parserAdd = subparsers.addParser("add").help("add help")
                 .setDefault("func", new AddCommand());

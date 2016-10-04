@@ -13,9 +13,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static javafx.scene.input.KeyCode.R;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 /**
  * Created by andy on 10/1/16.
@@ -171,5 +171,44 @@ public class TestCommands {
 
         Rush.main(new String[]{"clean"});
         assertTrue(im.getUntrackedFiles().isEmpty());
+    }
+
+    @Test
+    public void resetTest() throws IOException, ClassNotFoundException, PatchFailedException {
+        File file1 = repoRoot.resolve("file1.txt").toFile();
+
+        Path file2path = repoRoot.resolve("subdir").resolve("file2.txt");
+        Path file3path = repoRoot.resolve("subdir").resolve("file3.txt");
+
+        File file2 = file2path.toFile();
+        File file3 = file3path.toFile();
+        final String s = "some text";
+        FileUtils.write(file1, s);
+        FileUtils.write(file2, s);
+        FileUtils.write(file3, s);
+
+        IndexManager im = new IndexManager(repoRoot.toString());
+        Rush.main(new String[]{"add", "subdir"});
+        assertEquals(1, im.getUntrackedFiles().size());
+        Rush.main(new String[]{"reset", "subdir"});
+        assertEquals(3, im.getUntrackedFiles().size());
+
+        Rush.main(new String[]{"add", "subdir"});
+        Rush.main(new String[]{"add", "file1.txt"});
+        Rush.main(new String[]{"commit", "-m", "message"});
+
+        FileUtils.deleteQuietly(file1);
+        FileUtils.deleteQuietly(file2path.toFile());
+        Rush.main(new String[]{"add", "file1.txt"});
+        Rush.main(new String[]{"add", "subdir"});
+        Rush.main(new String[]{"reset", "subdir"});
+        String hash = im.commit("message");
+        BranchManager bm = new BranchManager(repoRoot.toString());
+        bm.checkout(hash);
+
+        assertTrue(im.getDeletedFiles().contains("file1.txt"));
+        assertFalse(file1.exists());
+        assertTrue(file2.exists());
+        assertFalse(im.getDeletedFiles().contains(repoRoot.relativize(file2path).toString()));
     }
 }

@@ -42,7 +42,35 @@ public class IndexManager extends RepoManager {
         }
     }
 
-    class PatchCreator extends SimpleFileVisitor<Path> {
+    public HashSet<String> getDeletedFiles(String hash) {
+        Path deletedFilePath = Paths.get(getRevisionDir(hash)).resolve("deleted");
+        try {
+            return (HashSet<String>) Serializer.deserialize(deletedFilePath.toString());
+        } catch (IOException | ClassNotFoundException e) {
+            return new HashSet<>();
+        }
+    }
+
+    public HashMap<String, Boolean> getLineEndings() {
+        try {
+            return (HashMap<String, Boolean>) Serializer.deserialize(getLineEndingsFile());
+        }catch (IOException | ClassNotFoundException e) {
+            logger.error("", e);
+            return new HashMap<>();
+        }
+    }
+
+    public HashMap<String, Boolean> getLineEndings(String hash) {
+        Path lineEndingsPath = Paths.get(getRevisionDir(hash)).resolve("line-endings");
+        try {
+            return (HashMap<String, Boolean>) Serializer.deserialize(lineEndingsPath.toString());
+        }catch (IOException | ClassNotFoundException e) {
+            logger.error("", e);
+            return new HashMap<>();
+        }
+    }
+
+    private class PatchCreator extends SimpleFileVisitor<Path> {
         final IndexManager manager;
         final Revision revision;
         HashSet<String> deletedFiles = null;
@@ -55,12 +83,7 @@ public class IndexManager extends RepoManager {
             failedToIndexFiles = new ArrayList<>();
 
             deletedFiles = manager.getDeletedFiles();
-
-            try {
-                lineEndings = (HashMap<String, Boolean>) Serializer.deserialize(getLineEndingsFile());
-            }catch (IOException | ClassNotFoundException e) {
-                lineEndings = new HashMap<>();
-            }
+            lineEndings = manager.getLineEndings();
         }
         // Print information about
         // each type of file.
@@ -297,5 +320,52 @@ public class IndexManager extends RepoManager {
 
     public String getLineEndingsFile() {
         return Paths.get(getInternalRoot(), "line-endings").toString();
+    }
+
+    /**
+     * resets given file (or all files under this directory, if fileName is directory)
+     * @param fileName fil name relative to repo root
+     */
+    public void resetFile(String fileName) throws IOException, ClassNotFoundException {
+        Revision currentRevision = Revision.getTempIndexRevision(Paths.get(repoRoot));
+        Map<String, Revision.ModificationWithRepsectToParentRevisionType> modifiedFiles
+                = currentRevision.getModifiedFiles();
+        HashSet<String> deletedFiles = getDeletedFiles();
+        HashSet<String> parentDeletedFiles = getDeletedFiles(currentRevision.getParentHash());
+        HashMap<String, Boolean> parentLineEndings = getLineEndings(currentRevision.getParentHash());
+        HashMap<String, Boolean> lineEndings = getLineEndings();
+
+        for (String file : modifiedFiles.keySet()) {
+            if (!file.startsWith(fileName))
+                continue;
+            switch (modifiedFiles.get(file)) {
+                case NEW:
+                case MODIFIED: {
+                    FileUtils.deleteQuietly(Paths.get(getIndexDir())
+                            .resolve(file).toFile());
+
+                    if (parentDeletedFiles.contains(file)) {
+                        deletedFiles.add(file);
+                    }
+                    break;
+                }
+                case DELETED:
+                    deletedFiles.remove(file);
+                    break;
+            }
+
+            if (parentLineEndings.containsKey(file)) {
+                lineEndings.put(file, parentLineEndings.get(file));
+            } else {
+                lineEndings.remove(file);
+            }
+        }
+
+        Serializer.serialize(deletedFiles, getDeletedFilesFile());
+        Serializer.serialize(lineEndings, getLineEndingsFile());
+    }
+
+    public void reset() throws IOException, ClassNotFoundException {
+        resetFile(repoRoot);
     }
 }
