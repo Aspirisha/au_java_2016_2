@@ -1,0 +1,5 @@
+rootProject.name = 'SimpleFTP'
+include 'SimpleServer'
+include 'SimpleClient'
+include 'logback'
+

@@ -1,0 +1,15 @@
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '0.9.26'
+    compile project(':logback')
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+}
