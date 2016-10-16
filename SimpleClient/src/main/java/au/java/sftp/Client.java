@@ -196,7 +196,10 @@ public class Client {
                 System.out.format("Listing files in %s. \nTotal files number %d\n",
                         n.getString("path"), res.size());
                 System.out.println(Strings.repeat("-", 40));
-                res.stream().forEach(p -> System.out.println(p.getKey()));
+                res.stream().forEach(p -> {
+                    System.out.format("%s  %s\n", p.getKey(),
+                            p.getValue() ? "[d]" : "[f]");
+                });
                 System.out.println(Strings.repeat("-", 40));
                 System.out.print("> ");
             });
