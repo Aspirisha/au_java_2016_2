@@ -8,13 +8,8 @@ repositories {
     mavenCentral()
 }
 
-task allJars {
-    dependsOn ':SimpleClient:fatJar'
-    dependsOn ':SimpleServer:fatJar'
-}
-
 dependencies {
-    compile group: 'ch.qos.logback', name: 'logback-classic', version: '0.9.26'
     compile project(':logback')
     testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile group: 'commons-io', name: 'commons-io', version: '2.4'
 }

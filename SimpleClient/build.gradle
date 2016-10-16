@@ -8,6 +8,25 @@ repositories {
     mavenCentral()
 }
 
+task fatJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Version': version,
+                'Main-Class': 'au.java.sftp.Client',
+                'Class-Path': sourceSets.main.runtimeClasspath + files('src/main/resources/')
+    }
+    baseName = "sftpclient"
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+    rename { String fileName ->
+        fileName.split("-")[0] }
+}
+
+
 dependencies {
+    compile group: 'com.google.guava', name: 'guava', version: '15.0'
+    compile group: 'ch.qos.logback', name: 'logback-classic', version: '0.9.26'
+    compile group: 'net.sourceforge.argparse4j', name: 'argparse4j', version: '0.7.0' // arg parsing
     testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile project(':logback')
+    compile project(':SftpProtocol')
 }

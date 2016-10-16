@@ -1,9 +1,9 @@
 <configuration>
-    <property name="LOGDIR" value="${app.workdir}/.rush/logs" />
+    <property name="LOGDIR" value="${app.workdir}/.logs" />
 
     <appender name="LAST_RUN" class="ch.qos.logback.core.FileAppender">
         <param name="Append" value="false" />
-        <file>${LOGDIR}/main.log</file>
+        <file>${LOGDIR}/lastrun.log</file>
         <encoder>
             <pattern>%date %level [%thread] %logger{10} [%file : %line] %msg%n</pattern>
         </encoder>
@@ -21,9 +21,15 @@
         <!-- encoders are assigned the type
              ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -- %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %msg%n</pattern>
         </encoder>
     </appender>
+
+    <logger name="usermsg" level="debug" additivity="false">
+        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="LAST_RUN" />
+        <appender-ref ref="ALL" />
+    </logger>
 
     <root level="debug">
         <appender-ref ref="LAST_RUN" />

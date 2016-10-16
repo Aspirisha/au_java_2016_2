@@ -1,14 +1,15 @@
 package au.java.sftp;
 
 import com.google.common.collect.Range;
-import com.google.common.primitives.Shorts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.softhouse.jargo.Argument;
-import se.softhouse.jargo.ArgumentBuilder;
 import se.softhouse.jargo.CommandLineParser;
 import se.softhouse.jargo.ParsedArguments;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -19,13 +20,16 @@ import java.util.Scanner;
 import java.util.concurrent.*;
 
 import static se.softhouse.jargo.Arguments.integerArgument;
-import static se.softhouse.jargo.Arguments.optionArgument;
 
 /**
  * Created by andy on 10/12/16.
  */
 public class Server {
-    private final Logger logger = LoggerFactory.getLogger(Server.class);
+    private static final Logger logger = LoggerFactory.getLogger(Server.class);
+    private static final Logger userLogger = LoggerFactory.getLogger("usermsg");
+
+    private final Thread listeningThread;
+    private final ExecutorService executorService;
 
     private class ClientServerInstance implements Runnable {
         private final Socket clientSocket;
@@ -36,12 +40,34 @@ public class Server {
 
         @Override
         public void run() {
+            SftpProtocol.SftpServerProtocol p = SftpProtocol.getServerProtocol();
 
+            try(DataOutputStream dos = new DataOutputStream(clientSocket.getOutputStream());
+                DataInputStream dis = new DataInputStream(clientSocket.getInputStream())) {
+
+                while (!p.isFinished()) {
+                    int request = p.process(dis, dos);
+                    switch (request) {
+                        case SftpProtocol.REQUEST_GREET: {
+                            System.out.println("Client connected");
+                            break;
+                        }
+                        case SftpProtocol.REQUEST_BYE: {
+                            System.out.println("Client disconnected");
+                            break;
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     public void stop() {
-        logger.info("Stopping server...");
+        userLogger.info("Stopping server...");
+        listeningThread.stop();
+        executorService.shutdownNow();
     }
 
     private Server(int port, int maxPoolSize, int corePoolSize) {
@@ -50,50 +76,74 @@ public class Server {
         logger.info("Starting server on port " + port);
 
         final BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(queueSize);
-        ExecutorService executorService = new ThreadPoolExecutor(
+        executorService = new ThreadPoolExecutor(
                 corePoolSize, maxPoolSize, 1, TimeUnit.MINUTES, queue);
 
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Listening port " + port);
-            while (true) {
-                try (Socket clientSocket = serverSocket.accept()) {
-                    executorService.execute(new ClientServerInstance(clientSocket));
-                } catch (RejectedExecutionException rej) {
-                    logger.info("Rejected connection with client");
-                } catch (IOException e) {
-                    logger.error("", e);
+        listeningThread = new Thread(() -> {
+            try (ServerSocket serverSocket = new ServerSocket(port)) {
+                userLogger.info("Listening port " + port);
+                while (true) {
+                    try {
+                        executorService.execute(new ClientServerInstance(serverSocket.accept()));
+                    } catch (RejectedExecutionException rej) {
+                        logger.info("Rejected connection with client");
+                    } catch (IOException e) {
+                        logger.error("", e);
+                    }
                 }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        });
+        listeningThread.start();
     }
 
     public static void main(String[] args) {
         final String stopCommand = "stop";
         final String startCommand = "start";
+        final String exitCommand = "exit";
+
+        System.setProperty("app.workdir", System.getProperty("user.dir"));
 
         Server server = null;
-
+        System.out.println("Commands: \n start [-p port] [-c core-pool-size] " +
+                "[-m max-threads] \t starts server\n stop \t stop server\n exit \t exits this shell");
         Scanner sc = new Scanner(System.in);
         while (sc.hasNextLine()) {
-            String[] s = sc.nextLine().split(" ");
-            if (s[0].equals(startCommand)) {
-                if (null != server) {
-                    System.out.println("Server is already running");
+            System.out.print("> ");
+            String commandStr = sc.nextLine();
+            logger.info("New command: " + commandStr);
+            String[] s = commandStr.split(" ");
+
+            switch (s[0]) {
+                case startCommand:
+                    if (null != server) {
+                        System.out.println("Server is already running");
+                        continue;
+                    }
+                    server = parseArgsAndStartServer(Arrays.asList(s).subList(1, s.length));
+                    break;
+                case stopCommand:
+                    if (null == server) {
+                        System.out.println("Server is not running");
+                        continue;
+                    }
+                    server.stop();
+                    server = null;
+                    break;
+                case exitCommand:
+                    if (null != server) {
+                        server.stop();
+                        server = null;
+                    }
+                    System.out.println("Exiting...");
+                    System.exit(0);
+                case "":
                     continue;
-                }
-                server = parseArgsAndStartServer(Arrays.asList(s).subList(1, s.length));
-            } else if (s[0].equals(stopCommand)) {
-                if (null == server) {
-                    System.out.println("Server is not running");
-                    continue;
-                }
-                server.stop();
-                server = null;
-            } else {
-                System.out.format("Command should be either %s or %s\n",
-                        startCommand, stopCommand);
+                default:
+                    System.out.format("Command should be either %s or %s\n",
+                            startCommand, stopCommand);
+                    break;
             }
         }
     }
