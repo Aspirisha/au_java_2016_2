@@ -6,10 +6,7 @@ import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -24,6 +21,8 @@ public class SftpProtocol {
     public static final int REQUEST_GET = 2;
     public static final int REQUEST_GREET = 3;
     public static final int REQUEST_BYE = 4;
+
+    private static final int CHUNK_SIZE = 4096; // big files are sent chunk by chunk
 
     private SftpProtocol() {}
 
@@ -40,9 +39,16 @@ public class SftpProtocol {
         boolean isFinished();
     }
 
+    public interface FileDataProcessor {
+        boolean onStartGettingFile(long totalSize) throws IOException;
+        boolean onDataArrived(byte[] data, int size) throws IOException;
+        boolean onFinishGettingFile() throws IOException;
+    }
+
     public interface SftpClientProtocol {
         List<Pair<String, Boolean>> requestList(DataInputStream dis, DataOutputStream dos, String path) throws IOException;
-        byte[] requestFile(DataInputStream dis, DataOutputStream dos, String path) throws IOException;
+        void requestFile(DataInputStream dis, DataOutputStream dos, String path,
+                           FileDataProcessor dataProcessor) throws IOException;
 
         void greet(DataOutputStream dos) throws IOException;
         void farewell(DataOutputStream dos) throws IOException;
@@ -54,6 +60,7 @@ public class SftpProtocol {
                                                        String path) throws IOException {
             dos.writeInt(REQUEST_LIST);
             dos.writeUTF(path);
+            dos.flush();
 
             int size = dis.readInt();
 
@@ -66,23 +73,31 @@ public class SftpProtocol {
         }
 
         @Override
-        public byte[] requestFile(DataInputStream dis, DataOutputStream dos, String path) throws IOException {
+        public void requestFile(DataInputStream dis, DataOutputStream dos,
+                                  String path, FileDataProcessor dataProcessor) throws IOException {
             dos.writeInt(REQUEST_GET);
+            dos.flush();
             dos.writeUTF(path);
 
             long size = dis.readLong();
-            byte[] data = new byte[(int) size];
+            dataProcessor.onStartGettingFile(size);
+
+            byte[] data = new byte[CHUNK_SIZE];
             int totalRead = 0;
 
             while (totalRead < size) {
-                int bytesRead = dis.read(data, totalRead, (int) (size - totalRead));
+                int readAmount = (int) Math.min(CHUNK_SIZE, size - totalRead);
+
+                int bytesRead = dis.read(data, 0, readAmount);
                 if (bytesRead < 0) {
                     throw new IOException("Data stream ended prematurely");
                 }
                 totalRead += bytesRead;
+
+                dataProcessor.onDataArrived(data, bytesRead);
             }
 
-            return data;
+            dataProcessor.onFinishGettingFile();
         }
 
         @Override
@@ -98,7 +113,7 @@ public class SftpProtocol {
 
 
     private static class SftpServerProtocolImpl implements SftpServerProtocol {
-        private Logger logger = LoggerFactory.getLogger(SftpProtocol.class);
+        private static final Logger LOGGER = LoggerFactory.getLogger(SftpProtocol.class);
         private boolean finished = false;
 
         @Override
@@ -108,7 +123,7 @@ public class SftpProtocol {
             switch (request) {
                 case REQUEST_LIST: {
                     String data = dis.readUTF();
-                    logger.info("Requested listing in " + data);
+                    LOGGER.info("Requested listing in " + data);
                     Path p = Paths.get(data);
                     if (!p.toFile().isDirectory()) {
                         dos.writeInt(0);
@@ -118,9 +133,9 @@ public class SftpProtocol {
                     Collection<File> res = FileUtils.listFilesAndDirs(p.toFile(),
                            TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
 
-                    logger.info("Listing size is " + res.size());
+                    LOGGER.info("Listing size is " + res.size());
                     dos.writeInt(res.size() - 1);
-                    res.stream().forEach(f -> {
+                    res.forEach(f -> {
                         try {
                             if (f.equals(p.toFile())) {
                                return;
@@ -128,7 +143,7 @@ public class SftpProtocol {
                             dos.writeUTF(f.toString());
                             dos.writeBoolean(f.isDirectory());
                         } catch (IOException e) {
-                            logger.error("", e);
+                            LOGGER.error("", e);
                             e.printStackTrace();
                         }
                     });
@@ -137,7 +152,7 @@ public class SftpProtocol {
                 }
                 case REQUEST_GET: {
                     String file = dis.readUTF();
-                    logger.info("Requested get file " + file);
+                    LOGGER.info("Requested get file " + file);
                     File f = FileUtils.getFile(file);
 
                     if (!f.exists()) {
@@ -145,7 +160,24 @@ public class SftpProtocol {
                         break;
                     }
                     dos.writeLong(f.length());
-                    dos.write(FileUtils.readFileToByteArray(f));
+                    dos.flush();
+
+                    byte[] chunk = new byte[(int) Math.min(CHUNK_SIZE, f.length())];
+
+                    long totalRead = 0;
+                    try(FileInputStream fis = new FileInputStream(f);
+                            InputStream input = new BufferedInputStream(fis)) {
+
+                        while (totalRead < f.length()) {
+                            int readSize = input.read(chunk);
+                            dos.write(chunk, 0, readSize);
+                            dos.flush();
+                            totalRead += readSize;
+                        }
+
+                    }
+
+                    //dos.write(FileUtils.readFileToByteArray(f));
                     break;
                 }
                 case REQUEST_GREET: {

@@ -4,8 +4,10 @@ apply plugin: 'java'
 
 sourceCompatibility = 1.8
 
-repositories {
-    mavenCentral()
+subprojects {
+    repositories {
+        mavenCentral()
+    }
 }
 
 task allJars {

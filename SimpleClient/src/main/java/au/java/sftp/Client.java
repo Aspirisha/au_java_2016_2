@@ -8,10 +8,8 @@ import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.net.ConnectException;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.List;
@@ -19,7 +17,6 @@ import java.util.Optional;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 /**
  * Created by andy on 10/16/16.
@@ -32,12 +29,12 @@ public class Client {
     private DataOutputStream dos = null;
     private DataInputStream dis = null;
 
-    private SftpProtocol.SftpClientProtocol protocol = SftpProtocol.getClientProtocol();
-    private ExecutorService executorService;
-    private  ArgumentParser parser = null;
+    private final SftpProtocol.SftpClientProtocol protocol = SftpProtocol.getClientProtocol();
+    private final ExecutorService executorService;
+    private final ArgumentParser parser;
 
 
-    public Client() {
+    private Client() {
         executorService = Executors.newSingleThreadExecutor();
 
         parser = ArgumentParsers.newArgumentParser("", false)
@@ -106,7 +103,7 @@ public class Client {
         }
     }
 
-    void processCommand(String command) {
+    private void processCommand(String command) {
         String[] args = command.split(" ");
 
         try {
@@ -146,12 +143,17 @@ public class Client {
                 }
 
                 try {
-                    Client.this.socket = new Socket(host, port);
-                    Client.this.dis = new DataInputStream(socket.getInputStream());
-                    Client.this.dos = new DataOutputStream(socket.getOutputStream());
+                    socket = new Socket(host, port);
+                    dis = new DataInputStream(socket.getInputStream());
+                    dos = new DataOutputStream(socket.getOutputStream());
                 } catch (UnknownHostException e) {
                     logger.info("", e);
                     System.out.format("Couldn't resolve host name %s\n", host);
+                    return;
+                } catch (ConnectException e) {
+                    logger.info("", e);
+                    System.out.format("Couldn't connect to host %s\n", host);
+                    return;
                 } catch (IOException e) {
                     e.printStackTrace();
                     if (socket != null) {
@@ -209,7 +211,7 @@ public class Client {
     private class DisconnectCommand implements Command {
 
         @Override
-        public void execute(Namespace _) {
+        public void execute(Namespace unused) {
             executorService.execute(() -> {
                 if (socket == null) {
                     System.out.print("Can't disconnect: not connected to host\n> ");
@@ -219,10 +221,16 @@ public class Client {
                 System.out.println("Disconnecting from host...");
                 try {
                     protocol.farewell(dos);
-                    socket.close();
                 } catch (IOException e) {
                     logger.error("", e);
                     e.printStackTrace();
+                } finally {
+                    try {
+                        socket.close();
+                    } catch (IOException e) {
+                        logger.error("", e);
+                        System.out.println("Couldn't close socket");
+                    }
                 }
                 socket = null;
                 dis = null;
@@ -234,6 +242,47 @@ public class Client {
 
     private class GetCommand implements Command {
 
+        class FileWriter implements SftpProtocol.FileDataProcessor {
+            private String outputPath;
+            private OutputStream out;
+
+            FileWriter(String outputPath) {
+                this.outputPath = outputPath;
+
+            }
+
+            @Override
+            public boolean onStartGettingFile(long totalSize) throws IOException {
+                FileOutputStream fos = null;
+                try {
+                    fos = new java.io.FileOutputStream(outputPath);
+                    out = new BufferedOutputStream(fos);
+                } catch (FileNotFoundException e) {
+                    if (fos != null) {
+                        fos.close();
+                    }
+
+                    throw e;
+                }
+                return true;
+            }
+
+            @Override
+            public boolean onDataArrived(byte[] data, int size) throws IOException {
+                out.write(data, 0, size);
+                return true;
+            }
+
+            @Override
+            public boolean onFinishGettingFile() throws IOException {
+                if (out != null) {
+                    out.close();
+                }
+
+                return true;
+            }
+        }
+
         @Override
         public void execute(Namespace n) {
             executorService.execute(() -> {
@@ -241,32 +290,27 @@ public class Client {
                     System.out.print("Can't get file: not connected to host\n> ");
                     return;
                 }
-                byte[] res = null;
+
                 final String file = n.getString("path");
+                String storePath = n.getString("output");
+                FileWriter writer = new FileWriter(storePath);
+                File out = FileUtils.getFile(storePath);
                 try {
-                    res = protocol.requestFile(dis, dos, file);
+                    System.out.println("Saving file to " + out.getCanonicalPath());
+                } catch (IOException e) {
+                    logger.error("", e);
+                    System.out.println("Failed to resolve destination file name");
+                }
+
+                try {
+                    protocol.requestFile(dis, dos, file, writer);
                 } catch (IOException e) {
                     System.out.print("Error getting file\n> ");
                     logger.error("", e);
                     return;
                 }
-                System.out.println("Read file " + file);
-                System.out.println("Size is " + res.length);
+                System.out.println("Finished receiving file " + file);
 
-                String storePath = n.getString("output");
-                File out = FileUtils.getFile(storePath);
-                try {
-                    System.out.println("Saving file to " + out.getCanonicalPath());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                try {
-                    FileUtils.writeByteArrayToFile(FileUtils.getFile(storePath), res);
-                } catch (IOException e) {
-                    logger.error("", e);
-                    System.out.println("Failed to write destination file");
-                }
                 System.out.print("> ");
             });
         }

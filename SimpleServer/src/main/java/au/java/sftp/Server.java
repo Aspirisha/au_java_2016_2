@@ -9,7 +9,6 @@ import se.softhouse.jargo.ParsedArguments;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -60,6 +59,13 @@ public class Server {
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    logger.error("", e);
+                    System.out.println("Couldn't close client socket");
+                }
             }
         }
     }
