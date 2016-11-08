@@ -4,6 +4,12 @@
 # idea-specific stuff:
 .idea/
 
+# build:
+torrent_client/build/
+torrent_tracker/build/
+torrent_protocol/build/
+logback/build/
+
 # Gradle:
 .gradle
 /build/

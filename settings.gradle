@@ -1,0 +1,6 @@
+rootProject.name = 'tracker'
+include 'torrent_tracker'
+include 'torrent_client'
+include 'torrent_protocol'
+include 'logback'
+
