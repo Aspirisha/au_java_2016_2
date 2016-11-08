@@ -34,7 +34,7 @@ public class TrackerProtocol {
         return new ClientToServerProtocolImpl(serverIp);
     }
 
-    public static PeerClientProtocol getPeerClientProtocol(ClientDescriptor desc) throws IOException {
+    public static PeerClientProtocol getPeerClientProtocol(ClientDescriptor desc) throws Exception {
         return new PeerClientProtocolImpl(desc);
     }
 
@@ -93,18 +93,15 @@ public class TrackerProtocol {
         }
     }
 
-
-    private static class ClientToServerProtocolImpl implements ClientToServerProtocol {
-        private final Socket socket;
-
-        private Socket tryConnectToServer(String serverIp) {
+    private static class TimeoutSocketConnector {
+        public static Socket tryConnectToServer(String serverIp, int port) {
             final int WAIT_TIMOUT = 2000;
 
             final Socket[] s = new Socket[1];
             Thread socketThread=new Thread() {
                 public void run() {
                     try {
-                        s[0] = new Socket(serverIp, SERVER_PORT);
+                        s[0] = new Socket(serverIp, port);
                     }
                     catch (Exception e) {
                         // don't care here
@@ -121,9 +118,13 @@ public class TrackerProtocol {
 
             return s[0];
         }
+    }
+
+    private static class ClientToServerProtocolImpl implements ClientToServerProtocol {
+        private final java.net.Socket socket;
 
         public ClientToServerProtocolImpl(String serverIp) throws Exception {
-            socket = tryConnectToServer(serverIp);
+            socket = TimeoutSocketConnector.tryConnectToServer(serverIp, SERVER_PORT);
 
             if (socket == null) {
                 throw new Exception("Couldn't connect to server");
@@ -160,9 +161,15 @@ public class TrackerProtocol {
         private final ClientDescriptor clientDescriptor;
         private final Socket socket;
 
-        private PeerClientProtocolImpl(ClientDescriptor clientDescriptor) throws IOException {
+        private PeerClientProtocolImpl(ClientDescriptor clientDescriptor) throws Exception {
             this.clientDescriptor = clientDescriptor;
-            socket = new Socket(clientDescriptor.getStringIp(), clientDescriptor.getPort());
+
+            socket = TimeoutSocketConnector.tryConnectToServer(clientDescriptor.getStringIp(),
+                    clientDescriptor.getPort());
+
+            if (socket == null) {
+                throw new Exception("Couldn't connect to server");
+            }
         }
 
         @Override
