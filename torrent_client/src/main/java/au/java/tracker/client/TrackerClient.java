@@ -1,7 +1,10 @@
 package au.java.tracker.client;
 
-import au.java.tracker.protocol.*;
+import au.java.tracker.protocol.ClientDescriptor;
+import au.java.tracker.protocol.ClientRequestExecutor;
+import au.java.tracker.protocol.TrackerProtocol;
 import au.java.tracker.protocol.util.IpValidator;
+import au.java.tracker.protocol.util.TimeoutSocketConnector;
 import com.google.common.collect.Range;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +15,6 @@ import se.softhouse.jargo.ParsedArguments;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +29,7 @@ import static se.softhouse.jargo.Arguments.stringArgument;
 /**
  * Created by andy on 11/7/16.
  */
-public class TrackerClient {
+public class TrackerClient implements FileListProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger(TrackerClient.class);
     private static final Path CONFIG_FILE = Paths.get(".config");
     private static final Path CACHED_IP_FILE = Paths.get(".ips");
@@ -35,47 +37,17 @@ public class TrackerClient {
 
     private final Thread listeningThread;
     private final Thread updateThread;
-    private final ExecutorService uploadExecutorService;
     private final ExecutorService downloadExecutorService;
-    private final ClientRequestExecutor requestExecutor = new ClientRequestExecutorImpl();
     private final ClientDescriptor myDescriptor;
     private final IOHandler iohandler = new IOHandlerImpl();
     private String serverIp;
     private String myIp;
     private final Map<Integer, DownloadingFileDescriptor> myFiles;
 
-    private class ClientServerInstance implements Runnable {
-        private final Socket clientSocket;
-
-        ClientServerInstance(Socket clientSocket) {
-            this.clientSocket = clientSocket;
-        }
-
-        @Override
-        public void run() {
-            TrackerProtocol.PeerServerProtocol p = TrackerProtocol.getPeerServerProtocol();
-
-            try(DataOutputStream dos = new DataOutputStream(clientSocket.getOutputStream());
-                DataInputStream dis = new DataInputStream(clientSocket.getInputStream())) {
-                p.processCommand(dis, dos, requestExecutor);
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    LOGGER.error("", e);
-                    iohandler.onCantCloseClientSocket();
-                }
-            }
-        }
-    }
-
     public void stop() {
         iohandler.onFinishingJobs();
 
         listeningThread.interrupt();
-        uploadExecutorService.shutdownNow();
         downloadExecutorService.shutdownNow();
         updateThread.interrupt();
         writeConfig();
@@ -173,62 +145,12 @@ public class TrackerClient {
             throw new Exception("Invalid ip");
         }
 
-        uploadExecutorService = new ThreadPoolExecutor(DEFAULT_THREADS,
-                MAX_THREADS, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
         downloadExecutorService = new ThreadPoolExecutor(DEFAULT_THREADS,
                 MAX_THREADS, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
 
-        listeningThread = initListeningThread(port);
-        updateThread = initUpdateThread();
+        listeningThread = new Thread(new ConnectionListener(port));
+        updateThread = new Thread(new Updater(serverIp, myDescriptor, this));
     }
-
-    private Thread initListeningThread(int port) {
-        return new Thread(() -> {
-            LOGGER.info("Starting listening on port " + port);
-            try (ServerSocket serverSocket = new ServerSocket(port)) {
-                serverSocket.setSoTimeout(10000);
-                while (!Thread.interrupted()) {
-                    try {
-                        uploadExecutorService.execute(new ClientServerInstance(serverSocket.accept()));
-                    } catch (RejectedExecutionException rej) {
-                        LOGGER.info("Rejected connection with client");
-                    } catch (IOException e) {
-                        LOGGER.error("", e);
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    private Thread initUpdateThread() {
-        return new Thread(() -> {
-            TrackerProtocol.ClientToServerProtocol p = null;
-            try {
-                p = TrackerProtocol.getClientToServerProtocol(serverIp);
-            } catch (Exception e) {
-                LOGGER.error("", e);
-                return;
-            }
-
-            while (true) {
-                Set<Integer> fileIdSet = new HashSet<>();
-                synchronized (myFiles) {
-                    fileIdSet.addAll(myFiles.keySet());
-                }
-
-                p.serverRequestUpdate(myDescriptor, fileIdSet);
-                try {
-                    Thread.sleep(UPDATE_INTERVAL_SECONDS * 1000);
-                } catch (InterruptedException e) {
-                    return;
-                }
-            }
-        });
-    }
-
-
 
     private void run() throws Exception {
         final String UPLOAD_COMMAND = "upload";
@@ -241,8 +163,16 @@ public class TrackerClient {
         updateThread.start();
 
         TrackerProtocol.ClientToServerProtocol p = null;
+        Socket serverSocket = TimeoutSocketConnector.tryConnectToServer(serverIp,
+                TrackerProtocol.SERVER_PORT);
+
+        if (serverSocket == null) {
+            iohandler.onCantConnectToServer();
+            throw new Exception("Cant connect to server");
+        }
+
         try {
-            p = TrackerProtocol.getClientToServerProtocol(serverIp);
+            p = TrackerProtocol.getClientToServerProtocol(serverSocket);
         } catch (Exception e) {
             iohandler.onCantConnectToServer();
             throw e;
@@ -349,7 +279,7 @@ public class TrackerClient {
 
         TrackerClient client = null;
         try {
-            client =  new TrackerClient(port, ip);
+            client = new TrackerClient(port, ip);
             client.run();
         } catch (Exception ignored) {
             if (client != null) {
@@ -358,4 +288,13 @@ public class TrackerClient {
         }
     }
 
+    @Override
+    public Set<Integer> listFiles() {
+        Set<Integer> fileIdSet = new HashSet<>();
+        synchronized (myFiles) {
+            fileIdSet.addAll(myFiles.keySet());
+        }
+
+        return fileIdSet;
+    }
 }

@@ -1,7 +1,9 @@
 package au.java.tracker.client;
 
 import au.java.tracker.protocol.ClientDescriptor;
+import au.java.tracker.protocol.FileDescriptor;
 import au.java.tracker.protocol.TrackerProtocol;
+import au.java.tracker.protocol.util.TimeoutSocketConnector;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.Socket;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -37,27 +40,40 @@ class FileDownloader implements Callable<FileDownloadResult> {
     private ExecutorService partsDownloadExecutor;
     private RandomAccessFile outFile;
     private TrackerProtocol.ClientToServerProtocol p = null;
+    private Socket serverSocket;
 
-    private class FilePartDownloader implements Callable<Pair<Integer, byte[]>> {
+    private static class FilePartDownloader implements Callable<Pair<Integer, byte[]>> {
         final int filePart;
         final ClientDescriptor clientDescriptor;
-        final int expectedPartSize;
+        final DownloadingFileDescriptor fd;
 
-        FilePartDownloader(ClientDescriptor clientDescriptor, int filePart,
-                           int expectedPartSize) {
+        FilePartDownloader(ClientDescriptor clientDescriptor, DownloadingFileDescriptor fd,
+                           int filePart) {
             this.clientDescriptor = clientDescriptor;
             this.filePart = filePart;
-            this.expectedPartSize = expectedPartSize;
+            this.fd = fd;
         }
 
         @Override
-        public Pair<Integer, byte[]> call() throws Exception {
-            TrackerProtocol.PeerClientProtocol p =
-                    TrackerProtocol.getPeerClientProtocol(clientDescriptor);
+        public Pair<Integer, byte[]> call() {
+            Socket socket = TimeoutSocketConnector.tryConnectToServer(clientDescriptor.getStringIp(),
+                    clientDescriptor.getPort());
+
+            if (socket == null) {
+                return Pair.of(filePart, null);
+            }
+
+            TrackerProtocol.PeerClientProtocol p = TrackerProtocol.getPeerClientProtocol(socket);
 
             byte[] data = p.clientRequestGet(fd.getId(), filePart);
 
-            if (data != null && data.length == expectedPartSize) {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                LOGGER.error("", e);
+            }
+
+            if (data != null && data.length == fd.getPartSize(filePart)) {
                 return Pair.of(filePart, data);
             }
             return Pair.of(filePart, null);
@@ -70,8 +86,10 @@ class FileDownloader implements Callable<FileDownloadResult> {
     }
 
     private FileDownloadResult prepareDownloadLoop() {
+        serverSocket = TimeoutSocketConnector.tryConnectToServer(serverIp,
+                TrackerProtocol.SERVER_PORT);
         try {
-            p = TrackerProtocol.getClientToServerProtocol(serverIp);
+            p = TrackerProtocol.getClientToServerProtocol(serverSocket);
         } catch (Exception e) {
             LOGGER.error("", e);
             return CANT_CONNECT_TO_SERVER;
@@ -96,6 +114,13 @@ class FileDownloader implements Callable<FileDownloadResult> {
     public FileDownloadResult call() {
         FileDownloadResult res = prepareDownloadLoop();
         if (null != res) {
+            if (serverSocket != null) {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    LOGGER.error("", e);
+                }
+            }
             return exitDownload(res);
         }
 
@@ -109,12 +134,14 @@ class FileDownloader implements Callable<FileDownloadResult> {
             }
 
             for (ClientDescriptor cd : p.serverRequestSources(fd.getId())) {
-                TrackerProtocol.PeerClientProtocol pp;
-                try {
-                    pp = TrackerProtocol.getPeerClientProtocol(cd);
-                } catch (IOException e) {
+                Socket clientSocket = TimeoutSocketConnector.tryConnectToServer(
+                        cd.getStringIp(), cd.getPort());
+
+                if (null == clientSocket) {
                     continue;
                 }
+
+                TrackerProtocol.PeerClientProtocol pp = TrackerProtocol.getPeerClientProtocol(clientSocket);
 
                 for (Integer part : pp.clientRequestStat(fd.getId())) {
                     if (!fd.partsMap[part].compareAndSet(
@@ -124,7 +151,13 @@ class FileDownloader implements Callable<FileDownloadResult> {
                     }
                     // ok, we can now safely download this part
                     futures.add(partsDownloadExecutor.submit(
-                            new FilePartDownloader(cd, part, fd.lastPartSize)));
+                            new FilePartDownloader(cd, fd, part)));
+                }
+
+                try {
+                    clientSocket.close();
+                } catch (IOException e) {
+                    LOGGER.error("", e);
                 }
             }
 

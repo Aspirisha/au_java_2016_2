@@ -1,12 +1,16 @@
 package au.java.tracker.protocol;
 
+import au.java.tracker.protocol.util.TimeoutSocketConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -30,12 +34,12 @@ public class TrackerProtocol {
         return new ServerProtocolImpl();
     }
 
-    public static ClientToServerProtocol getClientToServerProtocol(String serverIp) throws Exception {
-        return new ClientToServerProtocolImpl(serverIp);
+    public static ClientToServerProtocol getClientToServerProtocol(Socket socket) throws Exception {
+        return new ClientToServerProtocolImpl(socket);
     }
 
-    public static PeerClientProtocol getPeerClientProtocol(ClientDescriptor desc) throws Exception {
-        return new PeerClientProtocolImpl(desc);
+    public static PeerClientProtocol getPeerClientProtocol(Socket socket) {
+        return new PeerClientProtocolImpl(socket);
     }
 
     public static PeerServerProtocol getPeerServerProtocol() {
@@ -93,47 +97,30 @@ public class TrackerProtocol {
         }
     }
 
-    private static class TimeoutSocketConnector {
-        public static Socket tryConnectToServer(String serverIp, int port) {
-            final int WAIT_TIMOUT = 2000;
-
-            final Socket[] s = new Socket[1];
-            Thread socketThread=new Thread() {
-                public void run() {
-                    try {
-                        s[0] = new Socket(serverIp, port);
-                    }
-                    catch (Exception e) {
-                        // don't care here
-                    }
-                }
-            };
-            socketThread.start();
-
-            try {
-                socketThread.join(WAIT_TIMOUT);
-            } catch (Exception e) {
-                LOGGER.error("", e);
-            }
-
-            return s[0];
-        }
-    }
-
     private static class ClientToServerProtocolImpl implements ClientToServerProtocol {
         private final java.net.Socket socket;
+        private final DataOutputStream dos;
+        private final DataInputStream dis;
 
-        public ClientToServerProtocolImpl(String serverIp) throws Exception {
-            socket = TimeoutSocketConnector.tryConnectToServer(serverIp, SERVER_PORT);
-
-            if (socket == null) {
-                throw new Exception("Couldn't connect to server");
-            }
+        public ClientToServerProtocolImpl(Socket socket) throws Exception {
+            this.socket = socket;
+            dos = new DataOutputStream(socket.getOutputStream());
+            dis = new DataInputStream(socket.getInputStream());
         }
 
         @Override
-        public List<FileDescriptor> serverRequestList() {
-            return null;
+        public List<FileDescriptor> serverRequestList() throws IOException, ClassNotFoundException {
+            dos.writeInt(LIST_COMMAND_ID);
+            int filesNumber = dis.readInt();
+
+            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+            List<FileDescriptor> result = new ArrayList<>(filesNumber);
+            for (int i = 0; i < filesNumber; i++) {
+                FileDescriptor fd = (FileDescriptor) ois.readObject();
+                result.add(fd);
+            }
+
+            return result;
         }
 
         @Override
@@ -158,18 +145,10 @@ public class TrackerProtocol {
     }
 
     private static class PeerClientProtocolImpl implements PeerClientProtocol {
-        private final ClientDescriptor clientDescriptor;
         private final Socket socket;
 
-        private PeerClientProtocolImpl(ClientDescriptor clientDescriptor) throws Exception {
-            this.clientDescriptor = clientDescriptor;
-
-            socket = TimeoutSocketConnector.tryConnectToServer(clientDescriptor.getStringIp(),
-                    clientDescriptor.getPort());
-
-            if (socket == null) {
-                throw new Exception("Couldn't connect to server");
-            }
+        private PeerClientProtocolImpl(Socket socket) {
+            this.socket = socket;
         }
 
         @Override

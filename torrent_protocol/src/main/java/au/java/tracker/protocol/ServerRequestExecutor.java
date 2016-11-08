@@ -1,5 +1,6 @@
 package au.java.tracker.protocol;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
@@ -7,7 +8,7 @@ import java.util.Set;
  * Created by andy on 11/7/16.
  */
 public interface ServerRequestExecutor {
-    List<FileDescriptor> serverRequestList();
+    List<FileDescriptor> serverRequestList() throws IOException, ClassNotFoundException;
 
     /**
      * Uploads file to the tracker

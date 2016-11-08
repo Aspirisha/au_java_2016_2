@@ -60,4 +60,7 @@ public interface IOHandler {
     default void onCantConnectToServer() {
         System.out.println("Can't connect to server");
     }
+    default void onErrorListeningPort(int port) {
+        System.out.format("Error listening port %d\n", port);
+    }
 }
