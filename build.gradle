@@ -10,6 +10,11 @@ subprojects {
     }
 }
 
+task allJars {
+    dependsOn ':torrent_client:fatJar'
+    dependsOn ':torrent_tracker:fatJar'
+}
+
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }

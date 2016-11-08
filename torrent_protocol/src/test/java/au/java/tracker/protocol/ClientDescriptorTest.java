@@ -1,4 +1,4 @@
-package au.java.tracker;
+package au.java.tracker.protocol;
 
 import org.junit.Test;
 
@@ -7,7 +7,7 @@ import static junit.framework.TestCase.fail;
 /**
  * Created by andy on 11/7/16.
  */
-public class ProtocolTest {
+public class ClientDescriptorTest {
     @Test
     public void testClientDescriptor() {
         String[] valid_ips = {"127.0.0.1", "255.255.255.255", "0.0.0.0", "12.33.255.99"};

@@ -1,6 +1,0 @@
-2016-11-07 13:07:20,487 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: 0.0.0.0.0
-2016-11-07 13:07:20,491 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: 0.0.0
-2016-11-07 13:07:20,491 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: 0.0.0.0.
-2016-11-07 13:07:20,492 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: 256.0.0.0
-2016-11-07 13:07:20,492 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: Wow! Ip!
-2016-11-07 13:07:20,492 INFO [main] a.t.ClientDescriptor [ClientDescriptor.java : 24] Passed wrong ip address: 1.2.3.09338

@@ -1,4 +1,5 @@
-package au.java.tracker;
+package au.java.tracker.protocol;
+import au.java.tracker.protocol.util.IpValidator;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -6,23 +7,20 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
+import static au.java.tracker.protocol.util.IpValidator.IP_BYTES;
+
 /**
  * Created by andy on 11/7/16.
  */
 @Data
 public class ClientDescriptor {
-    private static final int IP_BYTES = 4;
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientDescriptor.class);
 
     private final Byte ip[];
-    private final short port;
+    private final int port;
 
-    private static final String IPADDRESS_PATTERN =
-            String.format("^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){%d}" +
-                    "([01]?\\d\\d?|2[0-4]\\d|25[0-5])$", IP_BYTES - 1);
-
-    public ClientDescriptor(String ip, short port) throws Exception {
-        if (!ip.matches(IPADDRESS_PATTERN)) {
+    public ClientDescriptor(String ip, int port) throws Exception {
+        if (!IpValidator.validateIp(ip)) {
             LOGGER.info("Passed wrong ip address: " + ip);
             throw new Exception("Invalid ip: " + ip);
         }

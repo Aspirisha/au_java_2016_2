@@ -1,6 +1,5 @@
-package au.java.tracker;
+package au.java.tracker.protocol;
 
-import java.io.OutputStream;
 import java.util.List;
 
 /**
