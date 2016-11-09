@@ -2,6 +2,7 @@ package au.java.tracker.client;
 
 import au.java.tracker.protocol.ClientDescriptor;
 import au.java.tracker.protocol.ClientRequestExecutor;
+import au.java.tracker.protocol.FileDescriptor;
 import au.java.tracker.protocol.TrackerProtocol;
 import au.java.tracker.protocol.util.IpValidator;
 import au.java.tracker.protocol.util.TimeoutSocketConnector;
@@ -13,7 +14,6 @@ import se.softhouse.jargo.CommandLineParser;
 import se.softhouse.jargo.ParsedArguments;
 
 import java.io.*;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -22,6 +22,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static se.softhouse.jargo.Arguments.integerArgument;
 import static se.softhouse.jargo.Arguments.stringArgument;
@@ -29,28 +31,34 @@ import static se.softhouse.jargo.Arguments.stringArgument;
 /**
  * Created by andy on 11/7/16.
  */
-public class TrackerClient implements FileListProvider {
+public class TrackerClient implements FileListProvider, ClientRequestExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(TrackerClient.class);
     private static final Path CONFIG_FILE = Paths.get(".config");
     private static final Path CACHED_IP_FILE = Paths.get(".ips");
-    private static final int UPDATE_INTERVAL_SECONDS = 5 * 60;
 
     private final Thread listeningThread;
     private final Thread updateThread;
-    private final ExecutorService downloadExecutorService;
+
+    private final ExecutorService taskService;
     private final ClientDescriptor myDescriptor;
     private final IOHandler iohandler = new IOHandlerImpl();
     private String serverIp;
     private String myIp;
-    private final Map<Integer, DownloadingFileDescriptor> myFiles;
+    private final ConcurrentHashMap<Integer, DownloadingFileDescriptor> myFiles;
+    private final onDownloadFinishedListener downloadListener = iohandler::onFileDownloaded;
+
+    public interface onDownloadFinishedListener {
+        void onDownloadFinished(DownloadingFileDescriptor fd,
+                                FileDownloadResult result);
+    }
 
     public void stop() {
         iohandler.onFinishingJobs();
 
         listeningThread.interrupt();
-        downloadExecutorService.shutdownNow();
+        taskService.shutdownNow();
         updateThread.interrupt();
-        writeConfig();
+        dumpMyFiles();
         writeIps();
     }
 
@@ -63,15 +71,15 @@ public class TrackerClient implements FileListProvider {
         }
     }
 
-    private Map<Integer, DownloadingFileDescriptor> readConfig() throws IOException {
+    private ConcurrentHashMap<Integer, DownloadingFileDescriptor> readConfig() throws IOException {
         if (!CONFIG_FILE.toFile().exists()) {
-            return new HashMap<>();
+            return new ConcurrentHashMap<>();
         }
 
         try (FileInputStream is =
                      new FileInputStream(CONFIG_FILE.toString());
              ObjectInputStream out = new ObjectInputStream(is)) {
-            return (Map<Integer, DownloadingFileDescriptor>) out.readObject();
+            return (ConcurrentHashMap<Integer, DownloadingFileDescriptor>) out.readObject();
         } catch(IOException e) {
             LOGGER.error("", e);
             iohandler.onCantCreateConfigFile();
@@ -81,8 +89,8 @@ public class TrackerClient implements FileListProvider {
             iohandler.onCorruptedConfig();
             CONFIG_FILE.toFile().delete();
         }
-
-        return new HashMap<>();
+        iohandler.onCantConnectToServer();
+        return new ConcurrentHashMap<>();
     }
 
     private void readCachedServerIp() {
@@ -100,7 +108,7 @@ public class TrackerClient implements FileListProvider {
         }
     }
 
-    private void writeConfig() {
+    private void dumpMyFiles() {
         try (FileOutputStream os =
                      new FileOutputStream(CONFIG_FILE.toString());
              ObjectOutputStream out = new ObjectOutputStream(os)) {
@@ -131,6 +139,7 @@ public class TrackerClient implements FileListProvider {
             throw new Exception("Null server ip");
         }
 
+
         try {
             myDescriptor = new ClientDescriptor(myIp, port);
         } catch (Exception e) {
@@ -145,16 +154,30 @@ public class TrackerClient implements FileListProvider {
             throw new Exception("Invalid ip");
         }
 
-        downloadExecutorService = new ThreadPoolExecutor(DEFAULT_THREADS,
+        taskService = new ThreadPoolExecutor(DEFAULT_THREADS,
                 MAX_THREADS, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
 
-        listeningThread = new Thread(new ConnectionListener(port));
+        listeningThread = new Thread(new ConnectionListener(port, this));
         updateThread = new Thread(new Updater(serverIp, myDescriptor, this));
+
+        // this thread dumps files once in a while
+        taskService.submit(() -> {
+            final int SLEEP_SECONDS = 60;
+
+            while (!Thread.interrupted()) {
+                dumpMyFiles();
+                try {
+                    Thread.sleep(SLEEP_SECONDS * 1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
     }
 
     private void run() throws Exception {
         final String UPLOAD_COMMAND = "upload";
-        final String GET_COMMAND = "get";
+        final String DOWNLOAD_COMMAND = "download";
         final String LIST_COMMAND = "list";
         final String EXIT_COMMAND = "exit";
         final String HELP_COMMAND = "help";
@@ -162,77 +185,23 @@ public class TrackerClient implements FileListProvider {
         listeningThread.start();
         updateThread.start();
 
-        TrackerProtocol.ClientToServerProtocol p = null;
-        Socket serverSocket = TimeoutSocketConnector.tryConnectToServer(serverIp,
-                TrackerProtocol.SERVER_PORT);
-
-        if (serverSocket == null) {
-            iohandler.onCantConnectToServer();
-            throw new Exception("Cant connect to server");
-        }
-
-        try {
-            p = TrackerProtocol.getClientToServerProtocol(serverSocket);
-        } catch (Exception e) {
-            iohandler.onCantConnectToServer();
-            throw e;
-        }
-
         iohandler.onHelpRequested();
         for (String command = iohandler.readCommand(); command != null;
              command = iohandler.readCommand()) {
             LOGGER.info("New command: " + command);
-            String[] s = command.split(" ", 1);
+            String[] s = command.split(" ", 2);
 
             switch (s[0].trim()) {
                 case UPLOAD_COMMAND: {
-                    if (s.length == 1) {
-                        iohandler.onFileToUploadNotSpecified();
-                        break;
-                    }
-                    Path file = Paths.get(s[1]);
-
-                    if (!file.toFile().exists()) {
-                        iohandler.onUnexistentUpload(file.toString());
-                        break;
-                    }
-
-                    p.serverRequestUpload(s[1], file.toFile().length());
+                    uploadCommand(s);
                     break;
                 }
-                case GET_COMMAND: {
-                    if (s.length == 1) {
-                        iohandler.onFileToDownloadNotSpecified();
-                        break;
-                    }
-
-                    Integer fileId;
-                    s = s[1].split(" ", 1);
-                    try {
-                        fileId = Integer.valueOf(s[0]);
-                    } catch (NumberFormatException e) {
-                        iohandler.onFileIdExpected();
-                        break;
-                    }
-
-                    au.java.tracker.protocol.FileDescriptor desc = p.describeFile(fileId);
-                    if (desc == null) {// file wasn't uploaded
-                        iohandler.onFileNotTracked(fileId);
-                        break;
-                    }
-
-                    synchronized (myFiles) {
-                        myFiles.putIfAbsent(fileId, new DownloadingFileDescriptor(desc,
-                                new HashSet<>(), s[1]));
-                    }
-                    DownloadingFileDescriptor fd = myFiles.get(fileId);
-
-                    downloadExecutorService.submit(new FileDownloader(fd, serverIp));
-
+                case DOWNLOAD_COMMAND: {
+                    getCommand(s);
                     break;
                 }
                 case LIST_COMMAND: {
-
+                    listCommand();
                     break;
                 }
                 case HELP_COMMAND: {
@@ -252,6 +221,113 @@ public class TrackerClient implements FileListProvider {
                 }
             }
         }
+    }
+
+    private void getCommand(String[] commandParts)
+            throws IOException {
+        if (commandParts.length == 1) {
+            iohandler.onFileToDownloadNotSpecified();
+            return;
+        }
+
+        Integer fileId;
+        commandParts = commandParts[1].split(" ", 2);
+
+
+        try {
+            fileId = Integer.valueOf(commandParts[0]);
+        } catch (NumberFormatException e) {
+            iohandler.onFileIdExpected();
+            return;
+        }
+
+        if (commandParts.length < 2 && !myFiles.containsKey(fileId)) {
+            iohandler.onOutputPathExpected();
+            return;
+        }
+
+        if (commandParts.length >= 2 && myFiles.containsKey(fileId)) {
+            iohandler.fileMovingNotSupported(myFiles.get(fileId));
+        }
+
+        if (myFiles.containsKey(fileId)) {
+            DownloadingFileDescriptor fd = myFiles.get(fileId);
+            if (fd.isCompletelyDownloaded()) {
+                iohandler.onFileDownloaded(fd, FileDownloadResult.FILE_IS_DOWNLOADED);
+                return;
+            }
+        }
+
+        au.java.tracker.protocol.FileDescriptor desc = null;
+        try (Socket s = TimeoutSocketConnector.tryConnectToServer(
+                serverIp, TrackerProtocol.SERVER_PORT)) {
+            TrackerProtocol.ClientToServerProtocol p = TrackerProtocol.getClientToServerProtocol(s);
+
+            desc = p.describeFile(fileId);
+        } catch (Exception e) {
+            LOGGER.error("", e);
+            iohandler.onCantConnectToServer();
+            return;
+        }
+
+        if (desc == null) {// file wasn't uploaded
+            iohandler.onFileNotTracked(fileId);
+            return;
+        }
+
+        myFiles.putIfAbsent(fileId, new DownloadingFileDescriptor(desc,
+                commandParts[1]));
+        DownloadingFileDescriptor fd = myFiles.get(fileId);
+
+        taskService.submit(new FileDownloader(fd, serverIp, downloadListener));
+    }
+
+    private void listCommand() {
+        taskService.submit(() -> {
+            try (Socket s = TimeoutSocketConnector.tryConnectToServer(
+                    serverIp, TrackerProtocol.SERVER_PORT)) {
+                TrackerProtocol.ClientToServerProtocol p = TrackerProtocol.getClientToServerProtocol(s);
+                List<FileDescriptor> l = p.serverRequestList();
+                iohandler.showFileList(l);
+            } catch (Exception e) {
+                LOGGER.error("", e);
+                iohandler.onListFailed();
+            }
+        });
+    }
+
+    private void uploadCommand(String[] commandParts) throws IOException {
+        if (commandParts.length == 1) {
+            iohandler.onFileToUploadNotSpecified();
+            return;
+        }
+        Path file = Paths.get(commandParts[1]);
+
+        if (!file.toFile().exists()) {
+            iohandler.onUnexistentUpload(file.toString());
+            return;
+        }
+
+        if (!file.toFile().isFile()) {
+            iohandler.onCantUploadDirectories();
+            return;
+        }
+
+        taskService.submit(() -> {
+            try (Socket s = TimeoutSocketConnector.tryConnectToServer(
+                    serverIp, TrackerProtocol.SERVER_PORT)) {
+                TrackerProtocol.ClientToServerProtocol p = TrackerProtocol.getClientToServerProtocol(s);
+                int id = p.serverRequestUpload(file.getFileName().toString(), file.toFile().length(), myDescriptor);
+
+                DownloadingFileDescriptor fd = DownloadingFileDescriptor.getForMyFile(id, file.toString());
+                myFiles.put(id, fd);
+                assert (myFiles.containsKey(id));
+                iohandler.onSuccessfulUpload(fd);
+            } catch (Exception e) {
+                LOGGER.error("", e);
+                iohandler.onUploadFailed(file.toString());
+            }
+        });
     }
 
     public static void main(String[] args) {
@@ -282,6 +358,7 @@ public class TrackerClient implements FileListProvider {
             client = new TrackerClient(port, ip);
             client.run();
         } catch (Exception ignored) {
+            ignored.printStackTrace();
             if (client != null) {
                 client.stop();
             }
@@ -291,10 +368,45 @@ public class TrackerClient implements FileListProvider {
     @Override
     public Set<Integer> listFiles() {
         Set<Integer> fileIdSet = new HashSet<>();
-        synchronized (myFiles) {
-            fileIdSet.addAll(myFiles.keySet());
-        }
+        fileIdSet.addAll(myFiles.keySet());
 
         return fileIdSet;
+    }
+
+    @Override
+    public List<Integer> clientRequestStat(int fileId) {
+        if (!myFiles.containsKey(fileId)) {
+            return new LinkedList<>();
+        }
+
+        return Arrays.stream(myFiles.get(fileId).partsMap).filter(
+                e -> e.get() == DownloadingFileDescriptor.PART_TYPE.IS_DOWNLOADED)
+                .map(AtomicInteger::get)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public byte[] clientRequestGet(int fileId, int partNum) {
+        if (myFiles.get(fileId) == null) {
+            return new byte[0];
+        }
+
+        DownloadingFileDescriptor desc = myFiles.get(fileId);
+        if (partNum >= desc.partsNumber || partNum < 0) {
+            return new byte[0];
+        }
+
+        if (desc.partsMap[partNum].get() != DownloadingFileDescriptor.PART_TYPE.IS_DOWNLOADED) {
+            return new byte[0];
+        }
+
+        byte[] buf = new byte[desc.getPartSize(partNum)];
+        try (RandomAccessFile raf = new RandomAccessFile(desc.outputPath, "r")) {
+            raf.readFully(buf, TrackerProtocol.CHUNK_SIZE * partNum, buf.length);
+            return buf;
+        } catch (IOException e) {
+            LOGGER.error("", e);
+            return new byte[0];
+        }
     }
 }

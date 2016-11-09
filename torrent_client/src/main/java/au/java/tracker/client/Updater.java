@@ -32,34 +32,27 @@ class Updater implements Runnable {
 
     @Override
     public void run() {
+        while (!Thread.interrupted()) {
+            try (Socket serverSocket = TimeoutSocketConnector.tryConnectToServer(serverIp,
+                    TrackerProtocol.SERVER_PORT)) {
 
-        TrackerProtocol.ClientToServerProtocol p = null;
-        Socket serverSocket = TimeoutSocketConnector.tryConnectToServer(serverIp,
-                TrackerProtocol.SERVER_PORT);
+                if (serverSocket == null) {
+                    return;
+                }
 
-        if (serverSocket == null) {
-            return;
-        }
+                TrackerProtocol.ClientToServerProtocol p = TrackerProtocol.getClientToServerProtocol(serverSocket);
 
-        try {
-            p = TrackerProtocol.getClientToServerProtocol(serverSocket);
-        } catch (Exception e) {
-            LOGGER.error("", e);
-            return;
-        }
+                Set<Integer> fileIdSet = listProvider.listFiles();
 
-        while (true) {
-            Set<Integer> fileIdSet = listProvider.listFiles();
+                p.serverRequestUpdate(myDescriptor, fileIdSet);
+            } catch (Exception e) {
+                LOGGER.error("", e);
+                iohandler.onErrorUpdating();
+            }
 
-            p.serverRequestUpdate(myDescriptor, fileIdSet);
             try {
                 Thread.sleep(UPDATE_INTERVAL_SECONDS * 1000);
             } catch (InterruptedException e) {
-                try {
-                    serverSocket.close();
-                } catch (IOException e1) {
-                    LOGGER.error("", e1);
-                }
                 return;
             }
         }

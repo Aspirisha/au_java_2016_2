@@ -1,7 +1,6 @@
 package au.java.tracker.client;
 
 import au.java.tracker.protocol.ClientDescriptor;
-import au.java.tracker.protocol.FileDescriptor;
 import au.java.tracker.protocol.TrackerProtocol;
 import au.java.tracker.protocol.util.TimeoutSocketConnector;
 import org.apache.commons.lang3.tuple.Pair;
@@ -17,7 +16,6 @@ import java.util.List;
 import java.util.concurrent.*;
 
 import static au.java.tracker.client.FileDownloadResult.*;
-import static javafx.scene.input.KeyCode.L;
 
 /**
  * Created by andy on 11/8/16.
@@ -41,6 +39,7 @@ class FileDownloader implements Callable<FileDownloadResult> {
     private RandomAccessFile outFile;
     private TrackerProtocol.ClientToServerProtocol p = null;
     private Socket serverSocket;
+    private final TrackerClient.onDownloadFinishedListener listener;
 
     private static class FilePartDownloader implements Callable<Pair<Integer, byte[]>> {
         final int filePart;
@@ -56,33 +55,32 @@ class FileDownloader implements Callable<FileDownloadResult> {
 
         @Override
         public Pair<Integer, byte[]> call() {
-            Socket socket = TimeoutSocketConnector.tryConnectToServer(clientDescriptor.getStringIp(),
-                    clientDescriptor.getPort());
+            try(Socket socket = TimeoutSocketConnector.tryConnectToServer(clientDescriptor.getStringIp(),
+                    clientDescriptor.getPort())) {
 
-            if (socket == null) {
-                return Pair.of(filePart, null);
-            }
+                if (socket == null) {
+                    return Pair.of(filePart, null);
+                }
 
-            TrackerProtocol.PeerClientProtocol p = TrackerProtocol.getPeerClientProtocol(socket);
+                TrackerProtocol.PeerClientProtocol p = TrackerProtocol.getPeerClientProtocol(socket);
 
-            byte[] data = p.clientRequestGet(fd.getId(), filePart);
+                byte[] data = p.clientRequestGet(fd.getId(), filePart);
 
-            try {
-                socket.close();
+                if (data != null && data.length == fd.getPartSize(filePart)) {
+                    return Pair.of(filePart, data);
+                }
             } catch (IOException e) {
                 LOGGER.error("", e);
-            }
-
-            if (data != null && data.length == fd.getPartSize(filePart)) {
-                return Pair.of(filePart, data);
             }
             return Pair.of(filePart, null);
         }
     }
 
-    FileDownloader(DownloadingFileDescriptor fd, String serverIp) {
+    FileDownloader(DownloadingFileDescriptor fd, String serverIp,
+                   TrackerClient.onDownloadFinishedListener listener) {
         this.serverIp = serverIp;
         this.fd = fd;
+        this.listener = listener;
     }
 
     private FileDownloadResult prepareDownloadLoop() {
@@ -111,7 +109,7 @@ class FileDownloader implements Callable<FileDownloadResult> {
     }
 
     @Override
-    public FileDownloadResult call() {
+    public FileDownloadResult call() throws IOException {
         FileDownloadResult res = prepareDownloadLoop();
         if (null != res) {
             if (serverSocket != null) {
@@ -121,6 +119,8 @@ class FileDownloader implements Callable<FileDownloadResult> {
                     LOGGER.error("", e);
                 }
             }
+
+            listener.onDownloadFinished(fd, res);
             return exitDownload(res);
         }
 
@@ -163,10 +163,12 @@ class FileDownloader implements Callable<FileDownloadResult> {
 
             if (!trySleep(futures)) {
                 partsDownloadExecutor.shutdownNow();
+                listener.onDownloadFinished(fd, INTERRUPTED);
                 return exitDownload(INTERRUPTED);
             }
         }
 
+        listener.onDownloadFinished(fd, FILE_IS_DOWNLOADED);
         return exitDownload(FILE_IS_DOWNLOADED);
     }
 
@@ -203,22 +205,20 @@ class FileDownloader implements Callable<FileDownloadResult> {
             if (result.getValue() != null) {
                 outFile.write(result.getValue(), TrackerProtocol.CHUNK_SIZE * result.getKey(),
                         result.getValue().length);
-                fd.partsMap[result.getKey()].set(DownloadingFileDescriptor.PART_TYPE.IS_DOWNLOADED);
-                fd.partsNumber++;
+                fd.onPartDownloaded(result.getKey());
                 return;
             }
             fd.partsMap[result.getKey()].set(
                     DownloadingFileDescriptor.PART_TYPE.NOT_DOWNLOADED);
         } catch (InterruptedException e) {
             LOGGER.error("", e);
-            // TODO consistency
-        } catch (ExecutionException e) {
+            // This is unreachable since by contract passed future is done
+        } catch (ExecutionException | IOException e) {
             LOGGER.error("", e);
-            // TODO consistency
-        } catch (IOException e) {
-            LOGGER.error("", e);
-            fd.partsMap[result.getKey()].set(
-                    DownloadingFileDescriptor.PART_TYPE.NOT_DOWNLOADED);
+            if (result != null) {
+                fd.partsMap[result.getKey()].set(
+                        DownloadingFileDescriptor.PART_TYPE.NOT_DOWNLOADED);
+            }
         }
 
     }

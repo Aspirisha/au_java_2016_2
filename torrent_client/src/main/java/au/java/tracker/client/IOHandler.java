@@ -1,6 +1,9 @@
 package au.java.tracker.client;
 
+import au.java.tracker.protocol.FileDescriptor;
 import com.google.common.base.Strings;
+
+import java.util.List;
 
 /**
  * Created by andy on 11/7/16.
@@ -23,16 +26,7 @@ public interface IOHandler {
     default void serverIpIsRequired() {
         System.out.println("Server ip was not specified and was not found in cache");
     }
-    default void onHelpRequested() {
-        System.out.format("/%s\\\n", Strings.repeat("-", 78));
-        System.out.println("  Available commands:");
-        System.out.println("\tupload <file_path> : upload file");
-        System.out.println("\tdownload <file id> <output path>: download file with given id");
-        System.out.println("\tlist : list files uploaded to tracker");
-        System.out.println("\thelp : show this help");
-        System.out.println("\texit : exit program");
-        System.out.format("\\%s/\n", Strings.repeat("-", 78));
-    }
+    void onHelpRequested();
     default void onUnknownCommand(String command) {
         System.out.format("Unknown command: %s\n\n", command);
     }
@@ -63,4 +57,30 @@ public interface IOHandler {
     default void onErrorListeningPort(int port) {
         System.out.format("Error listening port %d\n", port);
     }
+    default void onErrorUpdating() {
+        System.out.println("Error sending update request to server");
+    }
+    default void onUploadFailed(String fileName) {
+        System.out.println("Failed to upload file " + fileName);
+    }
+
+    default void onListFailed() {
+        System.out.println("Failed to list files");
+    }
+
+    void showFileList(List<FileDescriptor> l);
+
+    void onSuccessfulUpload(DownloadingFileDescriptor id);
+
+    void onFileDownloaded(DownloadingFileDescriptor fd, FileDownloadResult result);
+
+    default void onOutputPathExpected() {
+        System.out.println("Output path not provided");
+    }
+
+    default void onCantUploadDirectories() {
+        System.out.println("Directory uploads are not supported");
+    }
+
+    void fileMovingNotSupported(DownloadingFileDescriptor fd);
 }

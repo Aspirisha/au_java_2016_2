@@ -1,6 +1,10 @@
 package au.java.tracker.server;
 
-import com.google.common.base.Strings;
+import au.java.tracker.protocol.ClientDescriptor;
+import au.java.tracker.protocol.FileDescriptor;
+
+import java.util.Collection;
+import java.util.Set;
 
 /**
  * Created by andy on 11/8/16.
@@ -8,15 +12,7 @@ import com.google.common.base.Strings;
 public interface IOHandler {
     String readCommand();
 
-    default void onHelpRequested() {
-        System.out.format("/%s\\\n", Strings.repeat("-", 78));
-        System.out.println("  Commands:");
-        System.out.println("\t list-clients : list connected clients");
-        System.out.println("\t list-files : list uploaded files");
-        System.out.println("\t exit : stop server and exit");
-
-        System.out.format("\\%s/\n", Strings.repeat("-", 78));
-    }
+    void onHelpRequested();
     default void onUnknownCommand(String command) {
         System.out.format("Unknown command: %s\n\n", command);
     }
@@ -26,4 +22,11 @@ public interface IOHandler {
     default void onCantCloseClientSocket() {
         System.out.println("Couldn't close client socket");
     }
+
+    default void onCouldntReadState() {
+        System.out.println("Couldn't read server state file");
+    }
+
+    void listClients(Set<ClientDescriptor> aliveClients);
+    void listFiles(Collection<FileDescriptor> files);
 }

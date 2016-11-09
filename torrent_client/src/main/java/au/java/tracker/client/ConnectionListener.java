@@ -10,6 +10,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.concurrent.*;
 
 /**
@@ -21,10 +22,12 @@ public class ConnectionListener implements Runnable {
     private static final int DEFAULT_THREADS = 1;
 
     private final int port;
+    private final ClientRequestExecutor requestExecutor;
     private final ExecutorService uploadExecutorService;
 
-    ConnectionListener(int port) {
+    ConnectionListener(int port, ClientRequestExecutor requestExecutor) {
         this.port = port;
+        this.requestExecutor = requestExecutor;
         uploadExecutorService = new ThreadPoolExecutor(DEFAULT_THREADS,
                 MAX_THREADS, 1, TimeUnit.MINUTES, new SynchronousQueue<>());
     }
@@ -36,8 +39,10 @@ public class ConnectionListener implements Runnable {
             listeningSocket.setSoTimeout(5000);
             while (!Thread.interrupted()) {
                 try {
-                    uploadExecutorService.execute(new ClientServerInstance(listeningSocket.accept()));
-                } catch (RejectedExecutionException rej) {
+                    uploadExecutorService.execute(new ClientServerInstance(
+                            listeningSocket.accept(), requestExecutor));
+                } catch (SocketTimeoutException ignored) {}
+                catch (RejectedExecutionException rej) {
                     LOGGER.info("Rejected connection with client");
                 } catch (IOException e) {
                     LOGGER.error("", e);
@@ -52,9 +57,11 @@ public class ConnectionListener implements Runnable {
 
     private class ClientServerInstance implements Runnable {
         private final Socket clientSocket;
-        private final ClientRequestExecutor requestExecutor = new ClientRequestExecutorImpl();
-        ClientServerInstance(Socket clientSocket) {
+        private final ClientRequestExecutor requestExecutor;
+
+        ClientServerInstance(Socket clientSocket, ClientRequestExecutor requestExecutor) {
             this.clientSocket = clientSocket;
+            this.requestExecutor = requestExecutor;
         }
 
         @Override

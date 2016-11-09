@@ -3,15 +3,34 @@ package au.java.tracker.client;
 import au.java.tracker.protocol.FileDescriptor;
 import au.java.tracker.protocol.TrackerProtocol;
 
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Set;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by andy on 11/8/16.
  */
+
 class DownloadingFileDescriptor extends FileDescriptor implements Serializable {
+    public static DownloadingFileDescriptor getForMyFile(int id, String path) {
+        Path p = Paths.get(path);
+        String fileName = p.getFileName().toString();
+        FileDescriptor fd = new FileDescriptor(id, fileName, p.toFile().length());
+
+        String absPath = p.toAbsolutePath().toString();
+
+        try {
+            absPath =  p.toRealPath().toString();
+        } catch (IOException ignored) {}
+
+        DownloadingFileDescriptor res = new DownloadingFileDescriptor(fd, absPath);
+        res.setAllPartsToDownloaded();
+        return res;
+    }
+
     final class PART_TYPE {
         static final int NOT_DOWNLOADED = 0;
         static final int IS_DOWNLOADING = 1;
@@ -20,12 +39,12 @@ class DownloadingFileDescriptor extends FileDescriptor implements Serializable {
 
     final AtomicBoolean isBeingDownloaded;
     final String outputPath;
-    int partsNumber;
+    final int partsNumber;
     final AtomicInteger[] partsMap;
-    final int lastPartSize;
+    private final int lastPartSize;
     private final AtomicInteger downloadedPartsNumber = new AtomicInteger(0);
 
-    DownloadingFileDescriptor(FileDescriptor desc, Set<Integer> downloadedParts, String outputPath) {
+    DownloadingFileDescriptor(FileDescriptor desc, String outputPath) {
         super(desc);
 
         this.outputPath = outputPath;
@@ -59,5 +78,19 @@ class DownloadingFileDescriptor extends FileDescriptor implements Serializable {
             return lastPartSize;
         }
         return TrackerProtocol.CHUNK_SIZE;
+    }
+
+    private void setAllPartsToDownloaded() {
+        for (int i = 0; i < partsNumber; i++) {
+            partsMap[i].set(PART_TYPE.IS_DOWNLOADED);
+        }
+        downloadedPartsNumber.set(partsNumber);
+    }
+
+    boolean onPartDownloaded(int part) {
+        if (!partsMap[part].compareAndSet(PART_TYPE.IS_DOWNLOADING, PART_TYPE.IS_DOWNLOADED))
+            return false;
+        downloadedPartsNumber.incrementAndGet();
+        return true;
     }
 }
