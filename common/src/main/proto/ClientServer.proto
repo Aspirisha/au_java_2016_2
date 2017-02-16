@@ -1,0 +1,14 @@
+package cssort;
+
+option java_package = "cssort.protocol";
+option java_outer_classname = "ClientServerProtocol";
+
+message ClientToServerArray {
+  repeated int32 data = 1;
+}
+
+message ServerToClientArray {
+    repeated int32 data = 1;
+    required int64 requestTime = 2;
+    required int64 processTime = 3;
+}

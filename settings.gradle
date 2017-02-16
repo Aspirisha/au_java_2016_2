@@ -1,2 +1,6 @@
 rootProject.name = 'cssort'
-
+include 'client'
+include 'server'
+include 'profiler'
+include 'common'
+include 'logback'

@@ -6,7 +6,7 @@
 
 # Gradle:
 .gradle
-/build/
+*/build/
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
 
@@ -36,6 +36,9 @@ fabric.properties
 #java
 *.class
 logback/build
+
+#logs
+**/.logs/
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/

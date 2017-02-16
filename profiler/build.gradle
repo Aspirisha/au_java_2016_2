@@ -1,7 +1,7 @@
 version '1.0-SNAPSHOT'
 
 apply plugin: 'application'
-mainClassName = "start.HelloWorldSwing"
+mainClassName = "cssort.profiler.Main"
 sourceCompatibility = 1.8
 
 repositories {
