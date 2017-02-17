@@ -11,13 +11,8 @@ public class Statistics {
     @Data
     @AllArgsConstructor
     public static class ServerRunResult {
-        /*public ServerRunResult(long requestTime, long processTime) {
-            this.requestTime = requestTime;
-            this.processTime = processTime;
-        }*/
-
-        public long requestTime;
         public long processTime;
+        public long requestTime;
     }
 
     @Data

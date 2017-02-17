@@ -3,6 +3,7 @@ package cssort.client;
 import cssort.common.Statistics;
 import cssort.common.Util;
 import cssort.protocol.ClientServerProtocol;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -14,6 +15,7 @@ import java.util.Random;
 /**
  * Created by andy on 2/15/17.
  */
+@Slf4j
 public abstract class AbstractClient {
     final int N;
     final int delta;
@@ -41,7 +43,7 @@ public abstract class AbstractClient {
         List<Integer> a = new ArrayList<>(N);
         Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < N; i++) {
-            a.set(i, r.nextInt());
+            a.add(r.nextInt());
         }
         return a;
     }
@@ -53,11 +55,14 @@ public abstract class AbstractClient {
         sleep();
         dos.writeInt(msg.getSerializedSize());
         msg.writeTo(dos);
+        log.debug("Waiting for server response");
 
         byte[] buf = Util.readMessageWithSizePrepended(dis);
 
         ClientServerProtocol.ServerToClientArray response =
                 ClientServerProtocol.ServerToClientArray.parseFrom(buf);
+        log.debug(String.format("Server responded! process time: %d request time: %d",
+                response.getProcessTime(), response.getRequestTime()));
         return new Statistics.ServerRunResult(response.getRequestTime(),
                 response.getProcessTime());
 

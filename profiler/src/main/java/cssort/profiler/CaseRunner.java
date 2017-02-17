@@ -22,7 +22,6 @@ public class CaseRunner implements ClientController.CompleteListener {
     final int delta;
     final int clientArch;
     final int x;
-    final int serverArch;
 
     private AtomicInteger finishedClients = new AtomicInteger(0);
     private AtomicLong sumProcessTime = new AtomicLong(0);
@@ -30,12 +29,11 @@ public class CaseRunner implements ClientController.CompleteListener {
     private AtomicLong sumClientRuntime = new AtomicLong(0);
     private ArrayList<Thread> clientThreads = new ArrayList<>();
 
-    CaseRunner(int m, int n, int delta, int x, int clientArch, int serverArch) {
+    CaseRunner(int m, int n, int delta, int x, int clientArch) {
         this.m = m;
         this.n = n;
         this.delta = delta;
         this.clientArch = clientArch;
-        this.serverArch = serverArch;
         this.x = x;
     }
 
@@ -61,30 +59,24 @@ public class CaseRunner implements ClientController.CompleteListener {
     }
 
     public CaseResult run() throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(Settings.PROFILER_PORT)) {
-            serverSocket.setSoTimeout(60000);
-            for (int i = 0; i < m; i++) {
-                Thread t = new Thread(() -> {
-                    logger.debug("Creating new client");
-                    ClientController cc = new ClientController(n, x, delta, clientArch, this);
-                    cc.run();
-                });
-                clientThreads.add(t);
-                t.start();
-            }
-            for (Thread t : clientThreads) {
-                for (;;) {
-                    try {
-                        t.join();
-                        break;
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+        for (int i = 0; i < m; i++) {
+            Thread t = new Thread(new ClientController(n, x, delta, clientArch, this));
+            t.setName(String.format("Client #%d", i));
+            clientThreads.add(t);
+            t.start();
+        }
+        for (Thread t : clientThreads) {
+            for (;;) {
+                try {
+                    t.join();
+                    break;
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
-
-            return new CaseResult(sumProcessTime.get() / m,
-                    sumRequestTime.get() / m, sumClientRuntime.get() / m);
         }
+
+        return new CaseResult(sumProcessTime.get() / m,
+                sumRequestTime.get() / m, sumClientRuntime.get() / m);
     }
 }

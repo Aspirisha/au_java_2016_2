@@ -1,17 +1,21 @@
 package cssort.client;
 
 import cssort.common.*;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
+@Slf4j
 public class ClientController implements Runnable {
     final int n;
     final int x;
     final int delta;
     final int arch;
     final CompleteListener completeListener;
+
+    boolean finishedSuccesfull = true;
 
     public interface CompleteListener {
         void onComplete(Statistics.RunResult r);
@@ -32,12 +36,17 @@ public class ClientController implements Runnable {
     public void run() {
         switch (arch) {
             case Settings.TCP_CLIENT_PERSISTENT:
+                logger.debug("Using tcp persistent client");
                 client = new TcpPersistentClient(n, delta, x);
                 break;
         }
 
         long startTime = System.currentTimeMillis();
         List<Statistics.ServerRunResult> serverResults = client.run();
+        if (serverResults == null) {
+            finishedSuccesfull = false;
+            return;
+        }
         long clientRuntime = System.currentTimeMillis() - startTime;
         long averageProcessTime = 0;
         long averageRequestTime = 0;
@@ -47,9 +56,10 @@ public class ClientController implements Runnable {
             averageProcessTime += r.getProcessTime();
         }
         averageRequestTime /= serverResults.size();
+        averageProcessTime /= serverResults.size();
 
-        Statistics.ServerRunResult averageServerResult = new Statistics.ServerRunResult(averageProcessTime / serverResults.size(),
-                averageRequestTime / serverResults.size());
+        Statistics.ServerRunResult averageServerResult = new Statistics.ServerRunResult(averageProcessTime,
+                averageRequestTime);
         Statistics.RunResult result = new Statistics.RunResult(averageServerResult, clientRuntime);
         completeListener.onComplete(result);
     }

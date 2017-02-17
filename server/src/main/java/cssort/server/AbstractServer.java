@@ -1,5 +1,6 @@
 package cssort.server;
 
+import cssort.common.Util;
 import cssort.protocol.ClientServerProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +33,7 @@ public abstract class AbstractServer {
     }
 
     void processClient(long processTimeStart, DataInputStream dis, DataOutputStream dos) throws IOException {
-        int size = dis.readInt();
-        byte[] buf = new byte[size];
-
-        int readBytes = 0;
-        do {
-            readBytes += in.read(buf, readBytes, buf.length - readBytes);
-        } while (readBytes < buf.length);
+        byte[] buf = Util.readMessageWithSizePrepended(dis);
 
         ClientServerProtocol.ClientToServerArray input = ClientServerProtocol.ClientToServerArray.parseFrom(buf);
         ArrayList<Integer> l = new ArrayList<>(input.getDataList());

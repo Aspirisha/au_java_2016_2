@@ -17,7 +17,6 @@ public class ThreadPerClientServer extends AbstractServer {
         logger.debug("Server started");
         System.out.println("Listening on port " + Integer.toString(Settings.SERVER_PORT));
         try (ServerSocket s = new ServerSocket(Settings.SERVER_PORT)) {
-            s.setSoTimeout(20000);
             while (!Thread.interrupted()) {
                 logger.debug("Client connected");
                 Socket client = s.accept();

@@ -17,5 +17,4 @@ public class Settings {
     public static final int UDP_SERVER_THREAD_POOL = 6;
 
     public static final int SERVER_PORT = 1235;
-    public static final int PROFILER_PORT = 1236;
 }
