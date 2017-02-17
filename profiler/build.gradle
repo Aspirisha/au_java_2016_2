@@ -1,6 +1,7 @@
 version '1.0-SNAPSHOT'
 
 apply plugin: 'application'
+apply plugin: 'java'
 mainClassName = "cssort.profiler.ProfilerGUI"
 sourceCompatibility = 1.8
 
@@ -19,6 +20,7 @@ task fatJar(type: Jar) {
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
     compile "org.projectlombok:lombok:1.16.14"
+    compile 'com.intellij:forms_rt:7.0.3'
     compile project (':common')
     compile project (':client')
 }
