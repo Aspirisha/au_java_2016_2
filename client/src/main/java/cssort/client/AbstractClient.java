@@ -1,11 +1,8 @@
 package cssort.client;
 
+import cssort.common.Statistics;
+import cssort.common.Util;
 import cssort.protocol.ClientServerProtocol;
-import cssort.protocol.ProfilerClientProtocol;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -40,42 +37,31 @@ public abstract class AbstractClient {
         }
     }
 
-    ServerRunResult performInteractionWithServer(DataOutputStream dos, DataInputStream dis) throws IOException {
-        ClientServerProtocol.ClientToServerArray.Builder b = ClientServerProtocol.ClientToServerArray.newBuilder();
+    List<Integer> generateInput() {
         List<Integer> a = new ArrayList<>(N);
         Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < N; i++) {
             a.set(i, r.nextInt());
         }
-        b.addAllData(a);
+        return a;
+    }
 
-        ClientServerProtocol.ClientToServerArray msg = b.build();
-
+    Statistics.ServerRunResult performInteractionWithServer(DataOutputStream dos, DataInputStream dis) throws IOException {
+        ClientServerProtocol.ClientToServerArray msg =
+                ClientServerProtocol.ClientToServerArray.newBuilder()
+                .addAllData(generateInput()).build();
         sleep();
         dos.writeInt(msg.getSerializedSize());
         msg.writeTo(dos);
 
-        int size = dis.readInt();
-        byte[] buf = new byte[size];
-
-        int readBytes = 0;
-        do {
-            readBytes += dis.read(buf, readBytes, buf.length - readBytes);
-        } while (readBytes < buf.length);
+        byte[] buf = Util.readMessageWithSizePrepended(dis);
 
         ClientServerProtocol.ServerToClientArray response =
                 ClientServerProtocol.ServerToClientArray.parseFrom(buf);
-        return new ServerRunResult(response.getRequestTime(),
+        return new Statistics.ServerRunResult(response.getRequestTime(),
                 response.getProcessTime());
 
     }
 
-    abstract List<ServerRunResult> run() throws IOException;
-}
-
-@Data
-@AllArgsConstructor
-class ServerRunResult {
-    long requestTime;
-    long processTime;
+    abstract List<Statistics.ServerRunResult> run();
 }

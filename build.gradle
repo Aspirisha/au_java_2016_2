@@ -1,13 +1,12 @@
 version '1.0-SNAPSHOT'
 
-apply plugin: 'application'
-mainClassName = "start.HelloWorldSwing"
-sourceCompatibility = 1.8
-
-repositories {
-    mavenCentral()
+subprojects {
+    repositories {
+        mavenCentral()
+    }
 }
 
-dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.11'
+task build {
+    dependsOn ':server:fatJar'
+    dependsOn ':profiler:fatJar'
 }
