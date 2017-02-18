@@ -212,7 +212,6 @@ public class ProfilerGUI implements PropertyChangeListener {
         private final ArgDescription delta;
         private final int x;
         private final int clientArch;
-        private volatile CaseRunner currentRunner;
 
         BenchmarkRunner(ArgDescription m, ArgDescription n, ArgDescription delta, int x, int clientArch) {
             this.n = n;
@@ -229,7 +228,7 @@ public class ProfilerGUI implements PropertyChangeListener {
             setProgress(progress);
             publish(current);
 
-            currentRunner = new CaseRunner(m, n, delta, x, clientArch);
+            CaseRunner currentRunner = new CaseRunner(m, n, delta, x, clientArch);
             try {
                 CaseRunner.CaseResult result = currentRunner.run();
                 if (result != null) {
@@ -309,19 +308,15 @@ public class ProfilerGUI implements PropertyChangeListener {
                 Void result = get();
                 log.debug("Benchmark completed.\n");
                 showPlotButton.setEnabled(true);
+                progressMonitor.close();
             } catch (InterruptedException e) {
 
             } catch (CancellationException e) {
-                CaseRunner r = currentRunner;
-                progressMonitor.close();
                 log.debug("Benchmark canceled.\n");
             } catch (ExecutionException e) {
                 log.error("Exception occurred: " + e.getCause());
             }
-
-            progressMonitor.setProgress(0);
             runButton.setEnabled(true);
-            progressMonitor.close();
         }
     }
 

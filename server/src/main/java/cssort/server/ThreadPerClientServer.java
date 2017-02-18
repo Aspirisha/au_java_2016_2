@@ -23,11 +23,11 @@ public class ThreadPerClientServer extends AbstractServer {
 
                 new Thread(() -> {
                     try {
+                        DataInputStream dis = new DataInputStream(client.getInputStream());
+                        DataOutputStream dos = new DataOutputStream(client.getOutputStream());
                         while (true) {
-                            client.setSoTimeout(10000);
-                            processClient(System.currentTimeMillis(),
-                                    new DataInputStream(client.getInputStream()),
-                                    new DataOutputStream(client.getOutputStream()));
+                            client.setSoTimeout(5000);
+                            processClient(System.currentTimeMillis(), dis, dos);
                         }
                     } catch (IOException e) {
                         logger.error("Client disconnected", e);
