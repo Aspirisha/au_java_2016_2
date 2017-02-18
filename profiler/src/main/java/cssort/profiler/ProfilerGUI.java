@@ -15,10 +15,13 @@ import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.*;
+import java.net.Socket;
 import java.text.ParseException;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+
+import static sun.net.www.protocol.http.AuthCacheValue.Type.Server;
 
 /**
  * Created by andy on 2/15/17.
@@ -48,7 +51,6 @@ public class ProfilerGUI implements PropertyChangeListener {
     private JTextField statsFile;
     private JButton showPlotButton;
     private ProgressMonitor progressMonitor;
-
     private BenchmarkRunner benchmark;
 
     @Override
@@ -391,10 +393,29 @@ public class ProfilerGUI implements PropertyChangeListener {
             // add ProgressMonitorExample as a listener on CopyFiles;
             // of specific interest is the bound property progress
             benchmark.addPropertyChangeListener(ProfilerGUI.this);
+            if (!sendArchToServer(arch))
+                return;
+
             runButton.setEnabled(false);
             benchmark.execute();
             showPlotButton.setEnabled(false);
         });
+    }
+
+    private boolean sendArchToServer(Settings.Architecture arch) {
+        boolean success = false;
+
+        try (Socket serverControllerSocket = new Socket("localhost", Settings.SERVER_PORT_FOR_PROFILER);
+            DataOutputStream dos = new DataOutputStream(serverControllerSocket.getOutputStream());
+            DataInputStream dis = new DataInputStream((serverControllerSocket.getInputStream()))) {
+            dos.writeUTF(arch.toString());
+            success = dis.readBoolean();
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null, "Could not connect to server");
+            log.error("Couldn't connect to server", e);
+        }
+
+        return success;
     }
 
     class VariableGroupListener implements ActionListener {

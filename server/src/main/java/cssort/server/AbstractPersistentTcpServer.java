@@ -28,6 +28,12 @@ public abstract class AbstractPersistentTcpServer extends AbstractServer {
             } catch (IOException e) {
                 logger.error("Client disconnected", e);
             }
+
+            try {
+                client.close();
+            } catch (IOException e) {
+                logger.error("Error closing client socket", e);
+            }
         }
     }
 }

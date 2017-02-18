@@ -35,4 +35,5 @@ public class Settings {
     }
 
     public static final int SERVER_PORT = 1235;
+    public static final int SERVER_PORT_FOR_PROFILER = 1236;
 }

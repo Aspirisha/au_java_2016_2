@@ -2,7 +2,7 @@ version '1.0-SNAPSHOT'
 
 apply plugin: 'application'
 apply plugin: 'java'
-mainClassName = "cssort.server.Main"
+mainClassName = "cssort.server.ServerController"
 sourceCompatibility = 1.8
 
 task fatJar(type: Jar) {
