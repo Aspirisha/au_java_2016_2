@@ -32,7 +32,7 @@ public abstract class AbstractServer {
         }
     }
 
-    void processClient(long processTimeStart, DataInputStream dis, DataOutputStream dos) throws IOException {
+    void processClient(long requestTimeStart, DataInputStream dis, DataOutputStream dos) throws IOException {
         byte[] buf = Util.readMessageWithSizePrepended(dis);
 
         ClientServerProtocol.ClientToServerArray input = ClientServerProtocol.ClientToServerArray.parseFrom(buf);
@@ -40,12 +40,12 @@ public abstract class AbstractServer {
         long sortStart = System.currentTimeMillis();
         sort(l);
         long sortTime = System.currentTimeMillis() - sortStart;
-        long processTime = System.currentTimeMillis() - processTimeStart;
+        long requestTime = System.currentTimeMillis() - requestTimeStart;
         ClientServerProtocol.ServerToClientArray output =
                 ClientServerProtocol.ServerToClientArray.newBuilder()
                 .addAllData(l)
-                .setProcessTime(processTime)
-                .setRequestTime(sortTime)
+                .setSortTime(sortTime)
+                .setRequestTime(requestTime)
                 .build();
         dos.writeInt(output.getSerializedSize());
         output.writeTo(dos);

@@ -10,5 +10,5 @@ message ClientToServerArray {
 message ServerToClientArray {
     repeated int32 data = 1;
     required int64 requestTime = 2;
-    required int64 processTime = 3;
+    required int64 sortTime = 3;
 }

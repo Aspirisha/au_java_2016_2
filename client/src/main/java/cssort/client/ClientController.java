@@ -45,20 +45,21 @@ public class ClientController implements Runnable {
         List<Statistics.ServerRunResult> serverResults = client.run();
         if (serverResults == null) {
             finishedSuccesfull = false;
+            completeListener.onComplete(null);
             return;
         }
         long clientRuntime = System.currentTimeMillis() - startTime;
-        long averageProcessTime = 0;
+        long averageSortTime = 0;
         long averageRequestTime = 0;
 
         for (Statistics.ServerRunResult r: serverResults) {
             averageRequestTime += r.getRequestTime();
-            averageProcessTime += r.getProcessTime();
+            averageSortTime += r.getSortTime();
         }
         averageRequestTime /= serverResults.size();
-        averageProcessTime /= serverResults.size();
+        averageSortTime /= serverResults.size();
 
-        Statistics.ServerRunResult averageServerResult = new Statistics.ServerRunResult(averageProcessTime,
+        Statistics.ServerRunResult averageServerResult = new Statistics.ServerRunResult(averageSortTime,
                 averageRequestTime);
         Statistics.RunResult result = new Statistics.RunResult(averageServerResult, clientRuntime);
         completeListener.onComplete(result);

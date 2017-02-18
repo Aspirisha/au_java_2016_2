@@ -1,13 +1,11 @@
 package cssort.profiler;
 
 import cssort.client.ClientController;
-import cssort.common.Settings;
 import cssort.common.Statistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,10 +22,12 @@ public class CaseRunner implements ClientController.CompleteListener {
     final int x;
 
     private AtomicInteger finishedClients = new AtomicInteger(0);
-    private AtomicLong sumProcessTime = new AtomicLong(0);
+    private AtomicLong sumSortTime = new AtomicLong(0);
     private AtomicLong sumRequestTime = new AtomicLong(0);
     private AtomicLong sumClientRuntime = new AtomicLong(0);
     private ArrayList<Thread> clientThreads = new ArrayList<>();
+
+    private int failedClientsThresholdPercent = 5;
 
     CaseRunner(int m, int n, int delta, int x, int clientArch) {
         this.m = m;
@@ -37,9 +37,16 @@ public class CaseRunner implements ClientController.CompleteListener {
         this.x = x;
     }
 
+    public void cancel() {
+        for (Thread t: clientThreads) {
+            t.interrupt();
+        }
+    }
+
     @Override
     public void onComplete(Statistics.RunResult r) {
-        sumProcessTime.addAndGet(r.getServerResult().getProcessTime());
+        if (r == null) return;
+        sumSortTime.addAndGet(r.getServerResult().getSortTime());
         sumRequestTime.addAndGet(r.getServerResult().getRequestTime());
         sumClientRuntime.addAndGet(r.getClientRuntime());
         finishedClients.incrementAndGet();
@@ -71,12 +78,21 @@ public class CaseRunner implements ClientController.CompleteListener {
                     t.join();
                     break;
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    logger.debug("Case runner main thread interrupted. Shutting down all client threads.");
+                    cancel();
                 }
             }
         }
 
-        return new CaseResult(sumProcessTime.get() / m,
-                sumRequestTime.get() / m, sumClientRuntime.get() / m);
+        int failedClients = m - finishedClients.get();
+        int failedClientsPercentage = (failedClients * 100) / m;
+
+        if (failedClientsPercentage >= failedClientsThresholdPercent) {
+            return null;
+        }
+
+        int succesfullClients = finishedClients.get();
+        return new CaseResult(sumSortTime.get() / succesfullClients,
+                sumRequestTime.get() / succesfullClients, sumClientRuntime.get() / succesfullClients);
     }
 }

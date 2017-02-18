@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 
-import static sun.misc.PostVMInitHook.run;
-
 /**
  * Created by andy on 2/15/17.
  */
@@ -165,6 +163,7 @@ public class ProfilerGUI implements PropertyChangeListener {
         runButton.setText("Run");
         rootPanel.add(runButton, new GridConstraints(8, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         showPlotButton = new JButton();
+        showPlotButton.setEnabled(false);
         showPlotButton.setText("Show Plot");
         rootPanel.add(showPlotButton, new GridConstraints(8, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         ButtonGroup buttonGroup;
@@ -183,7 +182,7 @@ public class ProfilerGUI implements PropertyChangeListener {
 
     @AllArgsConstructor
     @Data
-    class BenchmarkProgress {
+    class BenchmarkCaseDescription {
         private int progress;
         private int casesProcessed;
         private int totalCases;
@@ -194,31 +193,54 @@ public class ProfilerGUI implements PropertyChangeListener {
         private int delta;
     }
 
-    class BenchmarkRunner extends SwingWorker<Void, BenchmarkProgress> {
+    @Data
+    @AllArgsConstructor
+    class ArgDescription {
+        final int minValue;
+        final int maxValue;
+        final int step;
+
+        int getCasesNumber() {
+            return (maxValue - minValue + step) / step;
+        }
+    }
+
+    class BenchmarkRunner extends SwingWorker<Void, BenchmarkCaseDescription> {
         private int progress = 0;
+        private final ArgDescription m;
+        private final ArgDescription n;
+        private final ArgDescription delta;
+        private final int x;
+        private final int clientArch;
+        private volatile CaseRunner currentRunner;
 
-        int commitAndGet(JSpinner s) {
-            Integer i = (Integer) s.getValue();
-            try {
-                s.commitEdit();
-            } catch (ParseException e) {
-                s.setValue(i);
-            }
-
-            return i;
+        BenchmarkRunner(ArgDescription m, ArgDescription n, ArgDescription delta, int x, int clientArch) {
+            this.n = n;
+            this.m = m;
+            this.delta = delta;
+            this.x = x;
+            this.clientArch = clientArch;
         }
 
+
         void singleRun(Writer writer, int runNumber, int totalCases, int m, int n, int delta, int x, int clientArch) {
-            BenchmarkProgress current = new BenchmarkProgress(progress, runNumber, totalCases, m, n, x, delta);
+            BenchmarkCaseDescription current = new BenchmarkCaseDescription(progress, runNumber, totalCases, m, n, x, delta);
             progress = (100 * runNumber) / totalCases;
             setProgress(progress);
             publish(current);
 
-            CaseRunner r = new CaseRunner(m, n, delta, x, clientArch);
+            currentRunner = new CaseRunner(m, n, delta, x, clientArch);
             try {
-                CaseRunner.CaseResult result = r.run();
-                writer.write(String.format("%d, %d, %d\n", result.averageProcessTime,
-                        result.averageRequestTime, result.averageClientRuntime));
+                CaseRunner.CaseResult result = currentRunner.run();
+                if (result != null) {
+                    writer.write(String.format("%d, %d, %d\n", result.averageProcessTime,
+                            result.averageRequestTime, result.averageClientRuntime));
+                } else {
+                    writer.write(String.format("%s, %s, %s\n", "NaN", "NaN", "NaN"));
+                    log.error(String.format("Too many clients failed on th case: " +
+                            "m = %d n = %d delta = %d x = %d, clientarch = %d",
+                            m, n, x, delta, clientArch));
+                }
 
             } catch (IOException e1) {
                 e1.printStackTrace();
@@ -234,44 +256,17 @@ public class ProfilerGUI implements PropertyChangeListener {
             String statsOutputFile = statsFile.getText();
             try (Writer writer = new BufferedWriter(new OutputStreamWriter(
                     new FileOutputStream(statsOutputFile), "utf-8"))) {
-                writer.write(String.format("%s, %s, %s\n", "Average Process Time",
-                        "Average Request Time", "Average Client Runtime"));
-                int clientArch = clientArchitecture.getSelectedIndex();
-                int n = commitAndGet(nValue);
-                int delta = commitAndGet(deltaValue);
-                int x = commitAndGet(xValue);
-                int m = commitAndGet(mValue);
+                writer.write(String.format("%s, %s, %s\n", "Sorting Time",
+                        "Request Time", "Client Runtime"));
+
+                int totalCases = n.getCasesNumber() * m.getCasesNumber() * delta.getCasesNumber();
                 int caseNumber = 0;
-                if (mRadioButton.isSelected()) {
-                    int minM = commitAndGet(mMin);
-                    int maxM = commitAndGet(mMax);
-                    int stepM = commitAndGet(mStep);
-                    stepM = Math.max(stepM, 1);
-
-
-                    int totalCases = (maxM - minM + stepM) / stepM;
-                    for (m = minM; m <= maxM; m += stepM, caseNumber++) {
-                        singleRun(writer, caseNumber, totalCases, m, n, delta, x, clientArch);
-                    }
-                } else if (nRadioButton.isSelected()) {
-                    int minN = commitAndGet(nMin);
-                    int maxN = commitAndGet(nMax);
-                    int stepN = commitAndGet(nStep);
-                    stepN = Math.max(stepN, 1);
-
-                    int totalCases = (maxN - minN + stepN) / stepN;
-                    for (n = minN; n <= maxN; n += stepN, caseNumber++) {
-                        singleRun(writer, caseNumber, totalCases, m, n, delta, x, clientArch);
-                    }
-                } else {
-                    int minDelta = commitAndGet(deltaMin);
-                    int maxDelta = commitAndGet(deltaMax);
-                    int stepDelta = commitAndGet(deltaStep);
-                    stepDelta = Math.max(stepDelta, 1);
-
-                    int totalCases = (maxDelta - minDelta + stepDelta) / stepDelta;
-                    for (delta = minDelta; n <= maxDelta; n += stepDelta, caseNumber++) {
-                        singleRun(writer, caseNumber, totalCases, m, n, delta, x, clientArch);
+                for (int mValue = m.minValue; mValue <= m.maxValue; mValue += m.step) {
+                    for (int nValue = n.minValue; nValue <= n.maxValue; nValue += n.step) {
+                        for (int deltaValue = delta.minValue; deltaValue <= delta.maxValue; deltaValue += delta.step) {
+                            singleRun(writer, caseNumber, totalCases, mValue, nValue, deltaValue, x, clientArch);
+                            caseNumber++;
+                        }
                     }
                 }
             } catch (UnsupportedEncodingException e1) {
@@ -285,12 +280,12 @@ public class ProfilerGUI implements PropertyChangeListener {
         }
 
         @Override
-        public void process(List<BenchmarkProgress> v) {
+        public void process(List<BenchmarkCaseDescription> v) {
             if (isCancelled() || v.isEmpty()) {
                 return;
             }
-            BenchmarkProgress update = v.get(0);
-            for (BenchmarkProgress d : v) {
+            BenchmarkCaseDescription update = v.get(0);
+            for (BenchmarkCaseDescription d : v) {
                 if (d.getCasesProcessed() > update.getCasesProcessed()) {
                     update = d;
                 }
@@ -313,17 +308,45 @@ public class ProfilerGUI implements PropertyChangeListener {
             try {
                 Void result = get();
                 log.debug("Benchmark completed.\n");
+                showPlotButton.setEnabled(true);
             } catch (InterruptedException e) {
 
             } catch (CancellationException e) {
+                CaseRunner r = currentRunner;
+                progressMonitor.close();
                 log.debug("Benchmark canceled.\n");
             } catch (ExecutionException e) {
                 log.error("Exception occurred: " + e.getCause());
             }
 
             progressMonitor.setProgress(0);
+            runButton.setEnabled(true);
             progressMonitor.close();
         }
+    }
+
+    private int commitAndGet(JSpinner s) {
+        Integer i = (Integer) s.getValue();
+        try {
+            s.commitEdit();
+        } catch (ParseException e) {
+            s.setValue(i);
+        }
+
+        return i;
+    }
+
+
+    ArgDescription creatVarArgDescription(JSpinner min, JSpinner max, JSpinner step) {
+        int minVal = commitAndGet(min);
+        int maxVal = commitAndGet(max);
+        int stepVal = Math.max(1, commitAndGet(step));
+        return new ArgDescription(minVal, maxVal, stepVal);
+    }
+
+    ArgDescription createConstArgDescription(JSpinner value) {
+        int constVal = commitAndGet(value);
+        return new ArgDescription(constVal, constVal, 1);
     }
 
     public ProfilerGUI() {
@@ -347,8 +370,6 @@ public class ProfilerGUI implements PropertyChangeListener {
 
         l.actionPerformed(new ActionEvent(mRadioButton, 0, ""));
         runButton.addActionListener(new ActionListener() {
-
-
             @Override
             public void actionPerformed(ActionEvent e) {
                 progressMonitor = new ProgressMonitor(rootPanel,
@@ -356,12 +377,22 @@ public class ProfilerGUI implements PropertyChangeListener {
                         "", 0, 100);
                 progressMonitor.setProgress(0);
 
+                ArgDescription mDesc = mRadioButton.isSelected() ?
+                        creatVarArgDescription(mMin, mMax, mStep) : createConstArgDescription(mValue);
+                ArgDescription nDesc = nRadioButton.isSelected() ?
+                        creatVarArgDescription(nMin, nMax, nStep) : createConstArgDescription(nValue);
+                ArgDescription deltaDesc = deltaRadioButton.isSelected() ?
+                        creatVarArgDescription(deltaMin, deltaMax, deltaStep) : createConstArgDescription(deltaValue);
                 // schedule the copy files operation for execution on a background thread
-                benchmark = new BenchmarkRunner();
+                int clientArch = clientArchitecture.getSelectedIndex();
+                int x = commitAndGet(xValue);
+                benchmark = new BenchmarkRunner(mDesc, nDesc, deltaDesc, x, clientArch);
                 // add ProgressMonitorExample as a listener on CopyFiles;
                 // of specific interest is the bound property progress
                 benchmark.addPropertyChangeListener(ProfilerGUI.this);
+                runButton.setEnabled(false);
                 benchmark.execute();
+                showPlotButton.setEnabled(false);
             }
         });
     }

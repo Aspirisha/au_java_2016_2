@@ -55,16 +55,13 @@ public abstract class AbstractClient {
         sleep();
         dos.writeInt(msg.getSerializedSize());
         msg.writeTo(dos);
-        log.debug("Waiting for server response");
 
         byte[] buf = Util.readMessageWithSizePrepended(dis);
 
         ClientServerProtocol.ServerToClientArray response =
                 ClientServerProtocol.ServerToClientArray.parseFrom(buf);
-        log.debug(String.format("Server responded! process time: %d request time: %d",
-                response.getProcessTime(), response.getRequestTime()));
-        return new Statistics.ServerRunResult(response.getRequestTime(),
-                response.getProcessTime());
+        return new Statistics.ServerRunResult(response.getSortTime(),
+                response.getRequestTime());
 
     }
 

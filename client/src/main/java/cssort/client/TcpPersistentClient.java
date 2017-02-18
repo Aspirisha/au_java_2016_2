@@ -27,6 +27,10 @@ public class TcpPersistentClient extends AbstractClient {
              DataInputStream dis = new DataInputStream(s.getInputStream())) {
             logger.debug("Connected to server");
             for (int msgNum = 0; msgNum < X; msgNum++) {
+                if (Thread.interrupted()) {
+                    logger.debug("Client interrupted");
+                    return null;
+                }
                 Statistics.ServerRunResult response = performInteractionWithServer(dos, dis);
                 ret.add(response);
             }

@@ -11,7 +11,7 @@ public class Statistics {
     @Data
     @AllArgsConstructor
     public static class ServerRunResult {
-        public long processTime;
+        public long sortTime;
         public long requestTime;
     }
 

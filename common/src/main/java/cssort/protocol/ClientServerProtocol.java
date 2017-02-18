@@ -506,13 +506,13 @@ public final class ClientServerProtocol {
     long getRequestTime();
 
     /**
-     * <code>required int64 processTime = 3;</code>
+     * <code>required int64 sortTime = 3;</code>
      */
-    boolean hasProcessTime();
+    boolean hasSortTime();
     /**
-     * <code>required int64 processTime = 3;</code>
+     * <code>required int64 sortTime = 3;</code>
      */
-    long getProcessTime();
+    long getSortTime();
   }
   /**
    * Protobuf type {@code cssort.ServerToClientArray}
@@ -594,7 +594,7 @@ public final class ClientServerProtocol {
             }
             case 24: {
               bitField0_ |= 0x00000002;
-              processTime_ = input.readInt64();
+              sortTime_ = input.readInt64();
               break;
             }
           }
@@ -677,25 +677,25 @@ public final class ClientServerProtocol {
       return requestTime_;
     }
 
-    public static final int PROCESSTIME_FIELD_NUMBER = 3;
-    private long processTime_;
+    public static final int SORTTIME_FIELD_NUMBER = 3;
+    private long sortTime_;
     /**
-     * <code>required int64 processTime = 3;</code>
+     * <code>required int64 sortTime = 3;</code>
      */
-    public boolean hasProcessTime() {
+    public boolean hasSortTime() {
       return ((bitField0_ & 0x00000002) == 0x00000002);
     }
     /**
-     * <code>required int64 processTime = 3;</code>
+     * <code>required int64 sortTime = 3;</code>
      */
-    public long getProcessTime() {
-      return processTime_;
+    public long getSortTime() {
+      return sortTime_;
     }
 
     private void initFields() {
       data_ = java.util.Collections.emptyList();
       requestTime_ = 0L;
-      processTime_ = 0L;
+      sortTime_ = 0L;
     }
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
@@ -707,7 +707,7 @@ public final class ClientServerProtocol {
         memoizedIsInitialized = 0;
         return false;
       }
-      if (!hasProcessTime()) {
+      if (!hasSortTime()) {
         memoizedIsInitialized = 0;
         return false;
       }
@@ -725,7 +725,7 @@ public final class ClientServerProtocol {
         output.writeInt64(2, requestTime_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
-        output.writeInt64(3, processTime_);
+        output.writeInt64(3, sortTime_);
       }
       getUnknownFields().writeTo(output);
     }
@@ -751,7 +751,7 @@ public final class ClientServerProtocol {
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt64Size(3, processTime_);
+          .computeInt64Size(3, sortTime_);
       }
       size += getUnknownFields().getSerializedSize();
       memoizedSerializedSize = size;
@@ -874,7 +874,7 @@ public final class ClientServerProtocol {
         bitField0_ = (bitField0_ & ~0x00000001);
         requestTime_ = 0L;
         bitField0_ = (bitField0_ & ~0x00000002);
-        processTime_ = 0L;
+        sortTime_ = 0L;
         bitField0_ = (bitField0_ & ~0x00000004);
         return this;
       }
@@ -916,7 +916,7 @@ public final class ClientServerProtocol {
         if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
           to_bitField0_ |= 0x00000002;
         }
-        result.processTime_ = processTime_;
+        result.sortTime_ = sortTime_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -946,8 +946,8 @@ public final class ClientServerProtocol {
         if (other.hasRequestTime()) {
           setRequestTime(other.getRequestTime());
         }
-        if (other.hasProcessTime()) {
-          setProcessTime(other.getProcessTime());
+        if (other.hasSortTime()) {
+          setSortTime(other.getSortTime());
         }
         this.mergeUnknownFields(other.getUnknownFields());
         return this;
@@ -958,7 +958,7 @@ public final class ClientServerProtocol {
           
           return false;
         }
-        if (!hasProcessTime()) {
+        if (!hasSortTime()) {
           
           return false;
         }
@@ -1082,34 +1082,34 @@ public final class ClientServerProtocol {
         return this;
       }
 
-      private long processTime_ ;
+      private long sortTime_ ;
       /**
-       * <code>required int64 processTime = 3;</code>
+       * <code>required int64 sortTime = 3;</code>
        */
-      public boolean hasProcessTime() {
+      public boolean hasSortTime() {
         return ((bitField0_ & 0x00000004) == 0x00000004);
       }
       /**
-       * <code>required int64 processTime = 3;</code>
+       * <code>required int64 sortTime = 3;</code>
        */
-      public long getProcessTime() {
-        return processTime_;
+      public long getSortTime() {
+        return sortTime_;
       }
       /**
-       * <code>required int64 processTime = 3;</code>
+       * <code>required int64 sortTime = 3;</code>
        */
-      public Builder setProcessTime(long value) {
+      public Builder setSortTime(long value) {
         bitField0_ |= 0x00000004;
-        processTime_ = value;
+        sortTime_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>required int64 processTime = 3;</code>
+       * <code>required int64 sortTime = 3;</code>
        */
-      public Builder clearProcessTime() {
+      public Builder clearSortTime() {
         bitField0_ = (bitField0_ & ~0x00000004);
-        processTime_ = 0L;
+        sortTime_ = 0L;
         onChanged();
         return this;
       }
@@ -1145,10 +1145,10 @@ public final class ClientServerProtocol {
   static {
     java.lang.String[] descriptorData = {
       "\n\022ClientServer.proto\022\006cssort\"#\n\023ClientTo" +
-      "ServerArray\022\014\n\004data\030\001 \003(\005\"M\n\023ServerToCli" +
+      "ServerArray\022\014\n\004data\030\001 \003(\005\"J\n\023ServerToCli" +
       "entArray\022\014\n\004data\030\001 \003(\005\022\023\n\013requestTime\030\002 " +
-      "\002(\003\022\023\n\013processTime\030\003 \002(\003B\'\n\017cssort.proto" +
-      "colB\024ClientServerProtocol"
+      "\002(\003\022\020\n\010sortTime\030\003 \002(\003B\'\n\017cssort.protocol" +
+      "B\024ClientServerProtocol"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -1173,7 +1173,7 @@ public final class ClientServerProtocol {
     internal_static_cssort_ServerToClientArray_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_cssort_ServerToClientArray_descriptor,
-        new java.lang.String[] { "Data", "RequestTime", "ProcessTime", });
+        new java.lang.String[] { "Data", "RequestTime", "SortTime", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)
