@@ -3,6 +3,7 @@ package cssort.profiler;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.intellij.uiDesigner.core.Spacer;
+import cssort.common.Settings;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -211,9 +212,10 @@ public class ProfilerGUI implements PropertyChangeListener {
         private final ArgDescription n;
         private final ArgDescription delta;
         private final int x;
-        private final int clientArch;
+        private final Settings.Architecture clientArch;
 
-        BenchmarkRunner(ArgDescription m, ArgDescription n, ArgDescription delta, int x, int clientArch) {
+        BenchmarkRunner(ArgDescription m, ArgDescription n, ArgDescription delta, int x,
+                        Settings.Architecture clientArch) {
             this.n = n;
             this.m = m;
             this.delta = delta;
@@ -222,7 +224,7 @@ public class ProfilerGUI implements PropertyChangeListener {
         }
 
 
-        void singleRun(Writer writer, int runNumber, int totalCases, int m, int n, int delta, int x, int clientArch) {
+        void singleRun(Writer writer, int runNumber, int totalCases, int m, int n, int delta, int x, Settings.Architecture clientArch) {
             BenchmarkCaseDescription current = new BenchmarkCaseDescription(progress, runNumber, totalCases, m, n, x, delta);
             progress = (100 * runNumber) / totalCases;
             setProgress(progress);
@@ -363,32 +365,35 @@ public class ProfilerGUI implements PropertyChangeListener {
         deltaStep.setValue(200);
         deltaValue.setValue(200);
 
-        l.actionPerformed(new ActionEvent(mRadioButton, 0, ""));
-        runButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                progressMonitor = new ProgressMonitor(rootPanel,
-                        "Operation in progress...",
-                        "", 0, 100);
-                progressMonitor.setProgress(0);
+        clientArchitecture.removeAllItems();
+        for (Settings.Architecture b : Settings.Architecture.values()) {
+            clientArchitecture.addItem(b.toString());
+        }
 
-                ArgDescription mDesc = mRadioButton.isSelected() ?
-                        creatVarArgDescription(mMin, mMax, mStep) : createConstArgDescription(mValue);
-                ArgDescription nDesc = nRadioButton.isSelected() ?
-                        creatVarArgDescription(nMin, nMax, nStep) : createConstArgDescription(nValue);
-                ArgDescription deltaDesc = deltaRadioButton.isSelected() ?
-                        creatVarArgDescription(deltaMin, deltaMax, deltaStep) : createConstArgDescription(deltaValue);
-                // schedule the copy files operation for execution on a background thread
-                int clientArch = clientArchitecture.getSelectedIndex();
-                int x = commitAndGet(xValue);
-                benchmark = new BenchmarkRunner(mDesc, nDesc, deltaDesc, x, clientArch);
-                // add ProgressMonitorExample as a listener on CopyFiles;
-                // of specific interest is the bound property progress
-                benchmark.addPropertyChangeListener(ProfilerGUI.this);
-                runButton.setEnabled(false);
-                benchmark.execute();
-                showPlotButton.setEnabled(false);
-            }
+        l.actionPerformed(new ActionEvent(mRadioButton, 0, ""));
+        runButton.addActionListener(e -> {
+            progressMonitor = new ProgressMonitor(rootPanel,
+                    "Operation in progress...",
+                    "", 0, 100);
+            progressMonitor.setProgress(0);
+
+            ArgDescription mDesc = mRadioButton.isSelected() ?
+                    creatVarArgDescription(mMin, mMax, mStep) : createConstArgDescription(mValue);
+            ArgDescription nDesc = nRadioButton.isSelected() ?
+                    creatVarArgDescription(nMin, nMax, nStep) : createConstArgDescription(nValue);
+            ArgDescription deltaDesc = deltaRadioButton.isSelected() ?
+                    creatVarArgDescription(deltaMin, deltaMax, deltaStep) : createConstArgDescription(deltaValue);
+            // schedule the copy files operation for execution on a background thread
+            Settings.Architecture arch = Settings.Architecture.fromString(
+                    (String)clientArchitecture.getSelectedItem());
+            int x = commitAndGet(xValue);
+            benchmark = new BenchmarkRunner(mDesc, nDesc, deltaDesc, x, arch);
+            // add ProgressMonitorExample as a listener on CopyFiles;
+            // of specific interest is the bound property progress
+            benchmark.addPropertyChangeListener(ProfilerGUI.this);
+            runButton.setEnabled(false);
+            benchmark.execute();
+            showPlotButton.setEnabled(false);
         });
     }
 

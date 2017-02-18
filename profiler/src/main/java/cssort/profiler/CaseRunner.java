@@ -1,6 +1,7 @@
 package cssort.profiler;
 
 import cssort.client.ClientController;
+import cssort.common.Settings;
 import cssort.common.Statistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +19,7 @@ public class CaseRunner implements ClientController.CompleteListener {
     final int m;
     final int n;
     final int delta;
-    final int clientArch;
+    final Settings.Architecture clientArch;
     final int x;
 
     private AtomicInteger finishedClients = new AtomicInteger(0);
@@ -29,7 +30,7 @@ public class CaseRunner implements ClientController.CompleteListener {
 
     private int failedClientsThresholdPercent = 5;
 
-    CaseRunner(int m, int n, int delta, int x, int clientArch) {
+    CaseRunner(int m, int n, int delta, int x, Settings.Architecture clientArch) {
         this.m = m;
         this.n = n;
         this.delta = delta;

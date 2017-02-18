@@ -12,7 +12,7 @@ public class ClientController implements Runnable {
     final int n;
     final int x;
     final int delta;
-    final int arch;
+    final Settings.Architecture arch;
     final CompleteListener completeListener;
 
     boolean finishedSuccesfull = true;
@@ -24,7 +24,7 @@ public class ClientController implements Runnable {
     protected static final Logger logger = LoggerFactory.getLogger(ClientController.class);
     AbstractClient client;
 
-    public ClientController(int n, int x, int delta, int arch, CompleteListener l) {
+    public ClientController(int n, int x, int delta, Settings.Architecture arch, CompleteListener l) {
         this.n = n;
         this.x = x;
         this.delta = delta;
@@ -35,7 +35,8 @@ public class ClientController implements Runnable {
     @Override
     public void run() {
         switch (arch) {
-            case Settings.TCP_CLIENT_PERSISTENT:
+            case TCP_CLIENT_PERSISTENT_SERVER_THREAD_PER_CLIENT:
+            case TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL:
                 logger.debug("Using tcp persistent client");
                 client = new TcpPersistentClient(n, delta, x);
                 break;
