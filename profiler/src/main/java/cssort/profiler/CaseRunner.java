@@ -93,7 +93,8 @@ public class CaseRunner implements ClientController.CompleteListener {
         }
 
         int succesfullClients = finishedClients.get();
-        return new CaseResult(sumSortTime.get() / succesfullClients,
-                sumRequestTime.get() / succesfullClients, sumClientRuntime.get() / succesfullClients);
+        int succesfullSorts = succesfullClients * x;
+        return new CaseResult(sumSortTime.get() / succesfullSorts,
+                sumRequestTime.get() / succesfullSorts, sumClientRuntime.get() / succesfullClients);
     }
 }

@@ -57,8 +57,6 @@ public class ClientController implements Runnable {
             averageRequestTime += r.getRequestTime();
             averageSortTime += r.getSortTime();
         }
-        averageRequestTime /= serverResults.size();
-        averageSortTime /= serverResults.size();
 
         Statistics.ServerRunResult averageServerResult = new Statistics.ServerRunResult(averageSortTime,
                 averageRequestTime);
