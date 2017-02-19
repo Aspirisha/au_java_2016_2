@@ -20,7 +20,7 @@ public class CachingThreadPoolServerOldIO extends AbstractPersistentOldIOTcpServ
         System.out.println("CachingThreadPoolServerOldIO is listening on port " + Integer.toString(Settings.SERVER_PORT));
 
         try (ServerSocket s = new ServerSocket(Settings.SERVER_PORT)) {
-            s.setSoTimeout(3000); // this is set only for being able to
+            s.setSoTimeout(CHECK_INTERRUPT_PERIOD_MILLIS); // this is set only for being able to
                                   // interrupt this loop fast enough when profiler asks to
             while (!Thread.interrupted()) {
                 try {

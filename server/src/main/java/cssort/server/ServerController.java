@@ -41,7 +41,7 @@ public class ServerController {
         idToArch.put(1, Architecture.TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL);
         idToArch.put(2, Architecture.TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING);
         idToArch.put(3, Architecture.TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL);
-        idToArch.put(4, Architecture.TCP_CLIENT_SPAWNING_SERVER_ASYNCHRONOUS);
+        idToArch.put(4, Architecture.TCP_CLIENT_PERSISTENT_SERVER_ASYNCHRONOUS);
         idToArch.put(5, Architecture.UDP_CLIENT_THREAD_PER_REQUEST);
         idToArch.put(6, Architecture.UDP_CLIENT_FIXED_THREAD_POOL);
     }
@@ -112,6 +112,10 @@ public class ServerController {
                     case TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL:
                         server = new SingleThreadedServer();
                         logger.debug("Creating tcp single threaded server");
+                        break;
+                    case TCP_CLIENT_PERSISTENT_SERVER_ASYNCHRONOUS:
+                        server = new TcpAsyncServer();
+                        logger.debug("Creating tcp async server");
                         break;
                 }
                 serverVersion++;

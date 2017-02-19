@@ -15,6 +15,7 @@ import java.util.Collections;
  * Created by andy on 2/16/17.
  */
 public abstract class AbstractServer {
+    static final int CHECK_INTERRUPT_PERIOD_MILLIS = 3000;
     static final Logger logger = LoggerFactory.getLogger(ServerController.class);
 
     void sort(ArrayList<Integer> data) {

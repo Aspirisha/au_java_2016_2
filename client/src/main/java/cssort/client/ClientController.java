@@ -38,11 +38,11 @@ public class ClientController implements Runnable {
             case TCP_CLIENT_PERSISTENT_SERVER_THREAD_PER_CLIENT:
             case TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL:
             case TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING:
+            case TCP_CLIENT_PERSISTENT_SERVER_ASYNCHRONOUS:
                 logger.debug("Using tcp persistent client");
                 client = new TcpPersistentClient(n, delta, x);
                 break;
             case TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL:
-            case TCP_CLIENT_SPAWNING_SERVER_ASYNCHRONOUS:
                 logger.debug("Using tcp spawning client");
                 client = new TcpSpawningClient(n, delta, x);
                 break;

@@ -15,7 +15,7 @@ public class ThreadPerClientServerOldIO extends AbstractPersistentOldIOTcpServer
         logger.debug("ThreadPerClientServerOldIO started");
         System.out.println("ThreadPerClientServerOldIO is listening on port " + Integer.toString(Settings.SERVER_PORT));
         try (ServerSocket s = new ServerSocket(Settings.SERVER_PORT)) {
-            s.setSoTimeout(3000);
+            s.setSoTimeout(CHECK_INTERRUPT_PERIOD_MILLIS);
             while (!Thread.interrupted()) {
                 try {
                     Socket client = s.accept();

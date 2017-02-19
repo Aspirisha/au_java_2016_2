@@ -9,7 +9,7 @@ public class Settings {
         TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL("Tcp persistent caching thread pool"),
         TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING("Tcp persistent non blocking"),
         TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL("Tcp spawning serial"),
-        TCP_CLIENT_SPAWNING_SERVER_ASYNCHRONOUS("Tcp spawning asynchronous"),
+        TCP_CLIENT_PERSISTENT_SERVER_ASYNCHRONOUS("Tcp persistent asynchronous"),
         UDP_CLIENT_THREAD_PER_REQUEST("Udp thread/request"),
         UDP_CLIENT_FIXED_THREAD_POOL("Udp thread pool"),
         ;

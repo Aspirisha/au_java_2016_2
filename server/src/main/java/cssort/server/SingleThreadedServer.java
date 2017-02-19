@@ -18,7 +18,7 @@ public class SingleThreadedServer extends AbstractServer {
         logger.debug("SingleThreadedServer started");
         System.out.println("SingleThreadedServer is listening on port " + Integer.toString(Settings.SERVER_PORT));
         try (ServerSocket s = new ServerSocket(Settings.SERVER_PORT)) {
-            s.setSoTimeout(3000);
+            s.setSoTimeout(CHECK_INTERRUPT_PERIOD_MILLIS);
             while (!Thread.interrupted()) {
                 try (Socket client = s.accept();
                      DataInputStream dis = new DataInputStream(client.getInputStream());

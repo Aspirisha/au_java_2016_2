@@ -35,7 +35,7 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             socket.register(selector, SelectionKey.OP_ACCEPT);
 
             while (!Thread.interrupted()) {
-                selector.select(3000);
+                selector.select(CHECK_INTERRUPT_PERIOD_MILLIS);
                 Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
 
                 while (keyIterator.hasNext()) {
