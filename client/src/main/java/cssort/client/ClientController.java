@@ -57,14 +57,14 @@ public class ClientController implements Runnable {
                 break;
         }
 
-        long startTime = System.currentTimeMillis();
+        long startTime = System.nanoTime();
         List<Statistics.ServerRunResult> serverResults = client.run();
         if (serverResults == null) {
             finishedSuccesfull = false;
             completeListener.onComplete(null);
             return;
         }
-        long clientRuntime = System.currentTimeMillis() - startTime;
+        long clientRuntime = System.nanoTime() - startTime;
         long averageSortTime = 0;
         long averageRequestTime = 0;
 

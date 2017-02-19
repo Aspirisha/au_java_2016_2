@@ -19,14 +19,14 @@ import java.util.Random;
 @Slf4j
 public abstract class AbstractClient {
     final int N;
-    final int delta;
+    final long delta;
     final int X;
     final InetAddress serverAddress;
     long lastResponceTimestamp = -1;
 
-    AbstractClient(int N, int delta, int X, InetAddress serverAddress) {
+    AbstractClient(int N, int deltaMillis, int X, InetAddress serverAddress) {
         this.N = N;
-        this.delta = delta;
+        this.delta = deltaMillis;
         this.X = X;
         this.serverAddress = serverAddress;
     }
@@ -45,7 +45,7 @@ public abstract class AbstractClient {
 
     List<Integer> generateInput() {
         List<Integer> a = new ArrayList<>(N);
-        Random r = new Random(System.currentTimeMillis());
+        Random r = new Random(System.nanoTime());
         for (int i = 0; i < N; i++) {
             a.add(r.nextInt());
         }

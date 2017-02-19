@@ -26,7 +26,7 @@ public abstract class AbstractPersistentOldIOTcpServer extends AbstractServer {
                     processClient(dis, dos);
                 }
             } catch (IOException e) {
-                logger.error("Client disconnected", e);
+                logger.error("Client disconnected");
             }
 
             try {

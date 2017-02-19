@@ -250,12 +250,17 @@ public class ProfilerGUI implements PropertyChangeListener {
             CaseRunner currentRunner = new CaseRunner(m, n, delta, x, clientArch, serverAddress);
             try {
                 CaseRunner.CaseResult result = currentRunner.run();
+                double nanoToMilli = 1e-6;
                 if (result != null) {
-                    datasetHolder.addTriplet(vararg.selectArg(m,n,delta), result.averageProcessTime,
-                            result.averageRequestTime, result.averageClientRuntime);
+                    datasetHolder.addTriplet(vararg.selectArg(m,n,delta),
+                            result.averageProcessTime * nanoToMilli,
+                            result.averageRequestTime * nanoToMilli,
+                            result.averageClientRuntime * nanoToMilli);
 
-                    writer.write(String.format("%d, %d, %d, %d\n", vararg.selectArg(m,n,delta),result.averageProcessTime,
-                            result.averageRequestTime, result.averageClientRuntime));
+                    writer.write(String.format("%d, %.3f, %.3f, %.3f\n", vararg.selectArg(m,n,delta),
+                            result.averageProcessTime * nanoToMilli,
+                            result.averageRequestTime * nanoToMilli,
+                            result.averageClientRuntime * nanoToMilli));
                 } else {
                     writer.write(String.format("%d, %s, %s, %s\n", vararg.selectArg(m,n,delta),"NaN", "NaN", "NaN"));
                     log.error(String.format("Too many clients failed on th case: " +

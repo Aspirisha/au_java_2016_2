@@ -71,7 +71,7 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             ClientServerProtocol.ServerToClientArray response = ClientServerProtocol.ServerToClientArray
                     .newBuilder()
                     .addAllData(data.array)
-                    .setRequestTime(System.currentTimeMillis() - data.requestStartTime)
+                    .setRequestTime(System.nanoTime() - data.requestStartTime)
                     .setSortTime(data.sortTimeEnd - data.sortTimeStart)
                     .build();
             data.outputMessage = ByteBuffer.allocate(Integer.BYTES + response.getSerializedSize());
@@ -82,10 +82,8 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
 
         try {
             channel.write(data.outputMessage);
-            logger.debug("output message buffer has remaining: " + data.outputMessage.remaining());
             if (!data.outputMessage.hasRemaining()) {
                 data.clear();
-                logger.debug("written fully");
             } else {
                 logger.debug("written partially");
             }
@@ -134,7 +132,7 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             if (data.body.hasRemaining()) return;
         }
 
-        data.requestStartTime = System.currentTimeMillis();
+        data.requestStartTime = System.nanoTime();
         data.body.flip();
         byte[] buf = new byte[data.body.limit()];
         data.body.get(buf);
@@ -146,9 +144,9 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             ClientServerProtocol.ClientToServerArray msg  = ClientServerProtocol.ClientToServerArray.parseFrom(buf);
             requestThreadPool.submit(() -> {
                 data.array = new ArrayList<>(msg.getDataList());
-                data.sortTimeStart = System.currentTimeMillis();
+                data.sortTimeStart = System.nanoTime();
                 sort(data.array);
-                data.sortTimeEnd = System.currentTimeMillis();
+                data.sortTimeEnd = System.nanoTime();
 
                 data.isSorted = true;
             });

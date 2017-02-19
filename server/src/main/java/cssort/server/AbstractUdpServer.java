@@ -49,7 +49,7 @@ public abstract class AbstractUdpServer extends AbstractServer {
 
         @Override
         public void run() {
-            long requestTimeStart = System.currentTimeMillis();
+            long requestTimeStart = System.nanoTime();
             ClientServerProtocol.ClientToServerArray input;
             try {
                 input = requestDescriptor.messageReceiver.getMessage(ClientServerProtocol.ClientToServerArray.PARSER);
@@ -59,10 +59,10 @@ public abstract class AbstractUdpServer extends AbstractServer {
             }
 
             ArrayList<Integer> l = new ArrayList<>(input.getDataList());
-            long sortStart = System.currentTimeMillis();
+            long sortStart = System.nanoTime();
             sort(l);
-            long sortTime = System.currentTimeMillis() - sortStart;
-            long requestTime = System.currentTimeMillis() - requestTimeStart;
+            long sortTime = System.nanoTime() - sortStart;
+            long requestTime = System.nanoTime() - requestTimeStart;
 
             ClientServerProtocol.ServerToClientArray output =
                     ClientServerProtocol.ServerToClientArray.newBuilder()

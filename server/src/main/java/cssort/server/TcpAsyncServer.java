@@ -101,7 +101,7 @@ public class TcpAsyncServer extends AbstractServer {
                         attachment, this);
                 return;
             }
-            logger.debug("Header fully read");
+
             attachment.header.flip();
             attachment.body = ByteBuffer.allocate(attachment.header.getInt());
             attachment.client.read(attachment.body, TIMEOUT_CLIENT_MILLIS, TimeUnit.MILLISECONDS,
@@ -129,8 +129,7 @@ public class TcpAsyncServer extends AbstractServer {
                 return;
             }
 
-            attachment.requestStartProcessTime = System.currentTimeMillis();
-            logger.debug("Body fully read");
+            attachment.requestStartProcessTime = System.nanoTime();
             attachment.body.flip();
             byte[] buf = new byte[attachment.body.limit()];
             attachment.body.get(buf);
@@ -145,15 +144,14 @@ public class TcpAsyncServer extends AbstractServer {
                 return;
             }
 
-            logger.debug("Sorting!");
-            long sortTimeStart = System.currentTimeMillis();
+            long sortTimeStart = System.nanoTime();
             sort(array);
-            long sortTime = System.currentTimeMillis() - sortTimeStart;
+            long sortTime = System.nanoTime() - sortTimeStart;
 
             ClientServerProtocol.ServerToClientArray response = ClientServerProtocol.ServerToClientArray
                     .newBuilder()
                     .addAllData(array)
-                    .setRequestTime(System.currentTimeMillis() - attachment.requestStartProcessTime)
+                    .setRequestTime(System.nanoTime() - attachment.requestStartProcessTime)
                     .setSortTime(sortTime)
                     .build();
 
@@ -162,7 +160,6 @@ public class TcpAsyncServer extends AbstractServer {
             attachment.response.put(response.toByteArray());
             attachment.response.flip();
 
-            logger.debug("Response is so long: " + attachment.response.limit());
             attachment.client.write(attachment.response, TIMEOUT_CLIENT_MILLIS, TimeUnit.MILLISECONDS,
                     attachment, new ResponseWriter());
         }

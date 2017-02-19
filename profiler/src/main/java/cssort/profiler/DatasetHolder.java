@@ -14,7 +14,7 @@ public class DatasetHolder {
         this.xName = xName;
     }
 
-    void addTriplet(int varargValue, long sortTime, long requestTime, long clientTime) {
+    void addTriplet(int varargValue, double sortTime, double requestTime, double clientTime) {
         dataset.addValue((Number) sortTime, "Sort Time", varargValue);
         dataset.addValue((Number) requestTime, "Request Time", varargValue);
         dataset.addValue((Number) clientTime, "Client Time", varargValue);
