@@ -241,7 +241,7 @@ public class ProfilerGUI implements PropertyChangeListener {
                 } else {
                     writer.write(String.format("%s, %s, %s\n", "NaN", "NaN", "NaN"));
                     log.error(String.format("Too many clients failed on th case: " +
-                            "m = %d n = %d delta = %d x = %d, clientarch = %d",
+                                    "m = %d n = %d delta = %d x = %d, clientarch = %d",
                             m, n, x, delta, clientArch));
                 }
 
@@ -387,7 +387,7 @@ public class ProfilerGUI implements PropertyChangeListener {
                     creatVarArgDescription(deltaMin, deltaMax, deltaStep) : createConstArgDescription(deltaValue);
             // schedule the copy files operation for execution on a background thread
             Settings.Architecture arch = Settings.Architecture.fromString(
-                    (String)clientArchitecture.getSelectedItem());
+                    (String) clientArchitecture.getSelectedItem());
             int x = commitAndGet(xValue);
             benchmark = new BenchmarkRunner(mDesc, nDesc, deltaDesc, x, arch);
             // add ProgressMonitorExample as a listener on CopyFiles;
@@ -406,8 +406,8 @@ public class ProfilerGUI implements PropertyChangeListener {
         boolean success = false;
 
         try (Socket serverControllerSocket = new Socket("localhost", Settings.SERVER_PORT_FOR_PROFILER);
-            DataOutputStream dos = new DataOutputStream(serverControllerSocket.getOutputStream());
-            DataInputStream dis = new DataInputStream((serverControllerSocket.getInputStream()))) {
+             DataOutputStream dos = new DataOutputStream(serverControllerSocket.getOutputStream());
+             DataInputStream dis = new DataInputStream((serverControllerSocket.getInputStream()))) {
             dos.writeUTF(arch.toString());
             success = dis.readBoolean();
         } catch (IOException e) {

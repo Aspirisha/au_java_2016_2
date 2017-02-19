@@ -106,6 +106,10 @@ public class ServerController {
                         server = new CachingThreadPoolServer();
                         logger.debug("Creating tcp server with caching thread pool");
                         break;
+                    case TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING:
+                        server = new NonBlockingFixedThreadPoolServer();
+                        logger.debug("Creating tcp non-blocking server");
+                        break;
                 }
                 serverVersion++;
                 // this returns only when current thread interrupted

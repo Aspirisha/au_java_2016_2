@@ -37,6 +37,7 @@ public class ClientController implements Runnable {
         switch (arch) {
             case TCP_CLIENT_PERSISTENT_SERVER_THREAD_PER_CLIENT:
             case TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL:
+            case TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING:
                 logger.debug("Using tcp persistent client");
                 client = new TcpPersistentClient(n, delta, x);
                 break;
