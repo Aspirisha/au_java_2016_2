@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 
+import static cssort.profiler.PlotShower.showChart;
+
 /**
  * Created by andy on 2/15/17.
  */
@@ -52,6 +54,7 @@ public class ProfilerGUI implements PropertyChangeListener {
     private JTextField serverAddressText;
     private ProgressMonitor progressMonitor;
     private BenchmarkRunner benchmark;
+    private DatasetHolder datasetHolder = new DatasetHolder("");
 
     @Override
     public void propertyChange(PropertyChangeEvent event) {
@@ -248,6 +251,9 @@ public class ProfilerGUI implements PropertyChangeListener {
             try {
                 CaseRunner.CaseResult result = currentRunner.run();
                 if (result != null) {
+                    datasetHolder.addTriplet(vararg.selectArg(m,n,delta), result.averageProcessTime,
+                            result.averageRequestTime, result.averageClientRuntime);
+
                     writer.write(String.format("%d, %d, %d, %d\n", vararg.selectArg(m,n,delta),result.averageProcessTime,
                             result.averageRequestTime, result.averageClientRuntime));
                 } else {
@@ -298,6 +304,7 @@ public class ProfilerGUI implements PropertyChangeListener {
                 int totalCases = n.getCasesNumber() * m.getCasesNumber() * delta.getCasesNumber();
                 int caseNumber = 0;
                 InetAddress serverAddress = InetAddress.getByName(serverAddressText.getText());
+                datasetHolder.reset(vararg.toString());
                 for (int mValue = m.minValue; mValue <= m.maxValue; mValue += m.step) {
                     for (int nValue = n.minValue; nValue <= n.maxValue; nValue += n.step) {
                         for (int deltaValue = delta.minValue; deltaValue <= delta.maxValue;
@@ -437,17 +444,7 @@ public class ProfilerGUI implements PropertyChangeListener {
             showPlotButton.setEnabled(false);
         });
 
-        showPlotButton.setEnabled(true);
-        showPlotButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                SwingUtilities.invokeLater(new Runnable() {
-                    public void run() {
-                        //createAndShowGui();
-                    }
-                });
-            }
-        });
+        showPlotButton.addActionListener(e -> SwingUtilities.invokeLater(() -> showChart(datasetHolder)));
     }
 
     private boolean sendArchToServer(Settings.Architecture arch) {
