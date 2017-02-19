@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -20,22 +21,25 @@ public abstract class AbstractClient {
     final int N;
     final int delta;
     final int X;
+    final InetAddress serverAddress;
     long lastResponceTimestamp = -1;
 
-    AbstractClient(int N, int delta, int X) {
+    AbstractClient(int N, int delta, int X, InetAddress serverAddress) {
         this.N = N;
         this.delta = delta;
         this.X = X;
+        this.serverAddress = serverAddress;
     }
 
-    private void sleep() {
+    void sleep() {
         long sleptTime = System.currentTimeMillis() - lastResponceTimestamp;
         while (sleptTime < delta) {
             try {
                 Thread.sleep(delta - sleptTime);
             } catch (InterruptedException e) {
-                sleptTime = System.currentTimeMillis() - lastResponceTimestamp;
+                return;
             }
+            sleptTime = System.currentTimeMillis() - lastResponceTimestamp;
         }
     }
 
@@ -46,23 +50,6 @@ public abstract class AbstractClient {
             a.add(r.nextInt());
         }
         return a;
-    }
-
-    Statistics.ServerRunResult performInteractionWithServer(DataOutputStream dos, DataInputStream dis) throws IOException {
-        ClientServerProtocol.ClientToServerArray msg =
-                ClientServerProtocol.ClientToServerArray.newBuilder()
-                .addAllData(generateInput()).build();
-        sleep();
-        dos.writeInt(msg.getSerializedSize());
-        msg.writeTo(dos);
-
-        byte[] buf = Util.readMessageWithSizePrepended(dis);
-
-        ClientServerProtocol.ServerToClientArray response =
-                ClientServerProtocol.ServerToClientArray.parseFrom(buf);
-        return new Statistics.ServerRunResult(response.getSortTime(),
-                response.getRequestTime());
-
     }
 
     abstract List<Statistics.ServerRunResult> run();

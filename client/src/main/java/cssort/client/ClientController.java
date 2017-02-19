@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.util.List;
 
 @Slf4j
@@ -14,6 +15,7 @@ public class ClientController implements Runnable {
     final int delta;
     final Settings.Architecture arch;
     final CompleteListener completeListener;
+    final InetAddress serverAddress;
 
     boolean finishedSuccesfull = true;
 
@@ -24,12 +26,14 @@ public class ClientController implements Runnable {
     protected static final Logger logger = LoggerFactory.getLogger(ClientController.class);
     AbstractClient client;
 
-    public ClientController(int n, int x, int delta, Settings.Architecture arch, CompleteListener l) {
+    public ClientController(int n, int x, int delta, Settings.Architecture arch,
+                            CompleteListener l, InetAddress serverAddress) {
         this.n = n;
         this.x = x;
         this.delta = delta;
         this.arch = arch;
         completeListener = l;
+        this.serverAddress = serverAddress;
     }
 
     @Override
@@ -40,11 +44,16 @@ public class ClientController implements Runnable {
             case TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING:
             case TCP_CLIENT_PERSISTENT_SERVER_ASYNCHRONOUS:
                 logger.debug("Using tcp persistent client");
-                client = new TcpPersistentClient(n, delta, x);
+                client = new TcpPersistentClient(n, delta, x, serverAddress);
                 break;
             case TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL:
                 logger.debug("Using tcp spawning client");
-                client = new TcpSpawningClient(n, delta, x);
+                client = new TcpSpawningClient(n, delta, x, serverAddress);
+                break;
+            case UDP_CLIENT_FIXED_THREAD_POOL:
+            case UDP_CLIENT_THREAD_PER_REQUEST:
+                logger.debug("Using udp client");
+                client = new UdpClient(n, delta, x, serverAddress);
                 break;
         }
 

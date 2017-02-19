@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +22,7 @@ public class CaseRunner implements ClientController.CompleteListener {
     final int delta;
     final Settings.Architecture clientArch;
     final int x;
+    final InetAddress serverAddress;
 
     private AtomicInteger finishedClients = new AtomicInteger(0);
     private AtomicLong sumSortTime = new AtomicLong(0);
@@ -30,12 +32,13 @@ public class CaseRunner implements ClientController.CompleteListener {
 
     private int failedClientsThresholdPercent = 5;
 
-    CaseRunner(int m, int n, int delta, int x, Settings.Architecture clientArch) {
+    CaseRunner(int m, int n, int delta, int x, Settings.Architecture clientArch, InetAddress serverAddress) {
         this.m = m;
         this.n = n;
         this.delta = delta;
         this.clientArch = clientArch;
         this.x = x;
+        this.serverAddress = serverAddress;
     }
 
     public void cancel() {
@@ -68,7 +71,7 @@ public class CaseRunner implements ClientController.CompleteListener {
 
     public CaseResult run() throws IOException {
         for (int i = 0; i < m; i++) {
-            Thread t = new Thread(new ClientController(n, x, delta, clientArch, this));
+            Thread t = new Thread(new ClientController(n, x, delta, clientArch, this, serverAddress));
             t.setName(String.format("Client #%d", i));
             clientThreads.add(t);
             t.start();

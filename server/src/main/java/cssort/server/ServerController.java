@@ -117,6 +117,14 @@ public class ServerController {
                         server = new TcpAsyncServer();
                         logger.debug("Creating tcp async server");
                         break;
+                    case UDP_CLIENT_THREAD_PER_REQUEST:
+                        server = new UdpThreadPerClient();
+                        logger.debug("Creating udp thread per client server");
+                        break;
+                    case UDP_CLIENT_FIXED_THREAD_POOL:
+                        server = new UdpFixedThreadPool();
+                        logger.debug("Creating udp thread per client server");
+                        break;
                 }
                 serverVersion++;
                 // this returns only when current thread interrupted
