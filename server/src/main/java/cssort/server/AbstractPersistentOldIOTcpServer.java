@@ -23,7 +23,7 @@ public abstract class AbstractPersistentOldIOTcpServer extends AbstractServer {
                 DataInputStream dis = new DataInputStream(client.getInputStream());
                 DataOutputStream dos = new DataOutputStream(client.getOutputStream());
                 while (true) {
-                    processClient(System.currentTimeMillis(), dis, dos);
+                    processClient(dis, dos);
                 }
             } catch (IOException e) {
                 logger.error("Client disconnected", e);

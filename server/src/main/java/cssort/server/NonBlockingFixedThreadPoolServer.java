@@ -84,8 +84,8 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             channel.write(data.outputMessage);
             logger.debug("output message buffer has remaining: " + data.outputMessage.remaining());
             if (!data.outputMessage.hasRemaining()) {
-                logger.debug("written fully");
                 data.clear();
+                logger.debug("written fully");
             } else {
                 logger.debug("written partially");
             }
@@ -134,6 +134,7 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
             if (data.body.hasRemaining()) return;
         }
 
+        data.requestStartTime = System.currentTimeMillis();
         data.body.flip();
         byte[] buf = new byte[data.body.limit()];
         data.body.get(buf);
@@ -161,7 +162,7 @@ public class NonBlockingFixedThreadPoolServer extends AbstractServer {
     }
 
     class RequestData {
-        long requestStartTime = System.currentTimeMillis();
+        long requestStartTime;
         long sortTimeStart;
         long sortTimeEnd;
         ArrayList<Integer> array = null;

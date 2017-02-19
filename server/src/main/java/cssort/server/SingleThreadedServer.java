@@ -23,7 +23,7 @@ public class SingleThreadedServer extends AbstractServer {
                 try (Socket client = s.accept();
                      DataInputStream dis = new DataInputStream(client.getInputStream());
                 DataOutputStream dos = new DataOutputStream(client.getOutputStream())) {
-                    processClient(System.currentTimeMillis(), dis, dos);
+                    processClient(dis, dos);
                 } catch (SocketTimeoutException e) {}
                 catch (IOException e) {
                     logger.info("Client probably disconnected", e);

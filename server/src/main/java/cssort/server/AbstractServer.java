@@ -31,9 +31,10 @@ public abstract class AbstractServer {
         }
     }
 
-    void processClient(long requestTimeStart, DataInputStream dis, DataOutputStream dos) throws IOException {
+    void processClient(DataInputStream dis, DataOutputStream dos) throws IOException {
         byte[] buf = Util.readMessageWithSizePrepended(dis);
 
+        long requestTimeStart = System.currentTimeMillis();
         ClientServerProtocol.ClientToServerArray input = ClientServerProtocol.ClientToServerArray.parseFrom(buf);
         ArrayList<Integer> l = new ArrayList<>(input.getDataList());
         long sortStart = System.currentTimeMillis();
