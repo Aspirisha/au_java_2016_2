@@ -2,8 +2,6 @@ package cssort.server;
 
 import cssort.common.Settings;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -13,13 +11,13 @@ import java.util.concurrent.*;
 /**
  * Created by andy on 2/18/17.
  */
-public class CachingThreadPoolServer extends AbstractPersistentTcpServer {
+public class CachingThreadPoolServerOldIO extends AbstractPersistentOldIOTcpServer {
     private ExecutorService threadPool = Executors.newCachedThreadPool();
 
     @Override
     void run() {
-        logger.debug("CachingThreadPoolServer started");
-        System.out.println("CachingThreadPoolServer is listening on port " + Integer.toString(Settings.SERVER_PORT));
+        logger.debug("CachingThreadPoolServerOldIO started");
+        System.out.println("CachingThreadPoolServerOldIO is listening on port " + Integer.toString(Settings.SERVER_PORT));
 
         try (ServerSocket s = new ServerSocket(Settings.SERVER_PORT)) {
             s.setSoTimeout(3000); // this is set only for being able to

@@ -41,6 +41,11 @@ public class ClientController implements Runnable {
                 logger.debug("Using tcp persistent client");
                 client = new TcpPersistentClient(n, delta, x);
                 break;
+            case TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL:
+            case TCP_CLIENT_SPAWNING_SERVER_ASYNCHRONOUS:
+                logger.debug("Using tcp spawning client");
+                client = new TcpSpawningClient(n, delta, x);
+                break;
         }
 
         long startTime = System.currentTimeMillis();

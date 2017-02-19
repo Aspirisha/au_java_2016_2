@@ -8,7 +8,7 @@ import java.net.Socket;
 /**
  * Created by andy on 2/18/17.
  */
-public abstract class AbstractPersistentTcpServer extends AbstractServer {
+public abstract class AbstractPersistentOldIOTcpServer extends AbstractServer {
     class ClientProcessor implements Runnable {
         final Socket client;
 
@@ -19,10 +19,10 @@ public abstract class AbstractPersistentTcpServer extends AbstractServer {
         @Override
         public void run() {
             try {
+                client.setSoTimeout(5000);
                 DataInputStream dis = new DataInputStream(client.getInputStream());
                 DataOutputStream dos = new DataOutputStream(client.getOutputStream());
                 while (true) {
-                    client.setSoTimeout(5000);
                     processClient(System.currentTimeMillis(), dis, dos);
                 }
             } catch (IOException e) {

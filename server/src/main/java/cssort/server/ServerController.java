@@ -4,7 +4,6 @@ package cssort.server;
 import com.google.common.collect.Range;
 import cssort.common.Settings;
 import cssort.common.Settings.Architecture;
-import javafx.scene.shape.Arc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.softhouse.jargo.Argument;
@@ -30,10 +29,10 @@ import static se.softhouse.jargo.Arguments.integerArgument;
  * Created by andy on 2/15/17.
  */
 public class ServerController {
-    protected static final Logger logger = LoggerFactory.getLogger(ServerController.class);
-    AbstractServer server = null;
-    volatile Architecture arch = null;
-    volatile int serverVersion = 0;
+    private static final Logger logger = LoggerFactory.getLogger(ServerController.class);
+    private AbstractServer server = null;
+    private volatile Architecture arch = null;
+    private volatile int serverVersion = 0;
 
     private static Map<Integer, Architecture> idToArch;
     static {
@@ -90,25 +89,29 @@ public class ServerController {
         serverContoller.start();
     }
 
-    ServerController(Architecture arch) {
+    private ServerController(Architecture arch) {
         this.arch = arch;
     }
 
-    void start() {
+    private void start() {
         Thread serverRunner = new Thread(() -> {
             while (true) {
                 switch (arch) {
                     case TCP_CLIENT_PERSISTENT_SERVER_THREAD_PER_CLIENT:
-                        server = new ThreadPerClientServer();
+                        server = new ThreadPerClientServerOldIO();
                         logger.debug("Creating tcp server with 1 thread per client");
                         break;
                     case TCP_CLIENT_PERSISTENT_SERVER_CACHING_THREAD_POOL:
-                        server = new CachingThreadPoolServer();
+                        server = new CachingThreadPoolServerOldIO();
                         logger.debug("Creating tcp server with caching thread pool");
                         break;
                     case TCP_CLIENT_PERSISTENT_SERVER_NON_BLOCKING:
                         server = new NonBlockingFixedThreadPoolServer();
                         logger.debug("Creating tcp non-blocking server");
+                        break;
+                    case TCP_CLIENT_SPAWNING_SERVER_SINGLE_THREADED_SERIAL:
+                        server = new SingleThreadedServer();
+                        logger.debug("Creating tcp single threaded server");
                         break;
                 }
                 serverVersion++;

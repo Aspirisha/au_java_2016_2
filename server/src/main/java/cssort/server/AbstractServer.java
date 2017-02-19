@@ -15,7 +15,7 @@ import java.util.Collections;
  * Created by andy on 2/16/17.
  */
 public abstract class AbstractServer {
-    protected static final Logger logger = LoggerFactory.getLogger(ServerController.class);
+    static final Logger logger = LoggerFactory.getLogger(ServerController.class);
 
     void sort(ArrayList<Integer> data) {
         for (int i = 0; i < data.size(); i++) {
