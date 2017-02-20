@@ -9,10 +9,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
+import static cssort.server.AbstractServer.CHECK_INTERRUPT_PERIOD_MILLIS;
+
 /**
  * Created by andy on 2/19/17.
  */
-public class SingleThreadedServer extends AbstractServer {
+public class SingleThreadedServer extends AbstractOldIOTcpServer {
     @Override
     void run() {
         logger.debug("SingleThreadedServer started");

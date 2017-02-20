@@ -8,7 +8,7 @@ import java.net.Socket;
 /**
  * Created by andy on 2/18/17.
  */
-public abstract class AbstractPersistentOldIOTcpServer extends AbstractServer {
+public abstract class AbstractPersistentOldIOTcpServer extends AbstractOldIOTcpServer {
     class ClientProcessor implements Runnable {
         final Socket client;
 
